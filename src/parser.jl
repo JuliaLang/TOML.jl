@@ -10,26 +10,25 @@ end
 
 Table(defined::Bool) = Table(Dict{AbstractString,Any}(), defined)
 function Base.show(io::IO, tbl::Table, level::Int=1)
-    println(io, "T($(tbl.defined)){ ")
+    Base.print(io, "T($(tbl.defined)){\n")
     for (k,v) in tbl.values
-        print(io, "\t"^level, k, " => ")
+        Base.print(io, "\t"^level, k, " => ")
         if isa(v, Table)
-            # print("\n\t"^level)
-            show(io, v, level+1)
-            println(io, "")
+            Base.show(io, v, level+1)
+            Base.print(io, "\n")
         elseif isa(v, Vector{Table})
-            println(io, "[ ")
+            Base.print(io, "[\n")
             for i in 1:length(v)
-                print(io, "\t"^level, "  ")
-                show(io, v[i], level+1)
-                i != length(v) && print(io, ",\n")
+                Base.print(io, "\t"^level, "  ")
+                Base.show(io, v[i], level+1)
+                i != length(v) && Base.print(io, ",\n")
             end
-            println("]")
+            Base.print("\t"^level, "]\n")
         else
-            println(io, " ", v)
+            Base.print(io, " $v\n")
         end
     end
-    print(io, "\t"^(level-1), "}")
+    Base.print(io, "\t"^(level-1), "}\n")
 end
 Base.getindex(tbl::Table, key::AbstractString) = tbl.values[key]
 Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)

@@ -3,6 +3,7 @@ __precompile__(true)
 module TOML
 
     include("parser.jl")
+    include("print.jl")
 
     "Convert `TOML.Table` to `Dict{AbstractString,Any}`"
     function table2dict(tbl::Nullable{Table})

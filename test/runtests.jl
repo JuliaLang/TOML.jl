@@ -620,3 +620,48 @@ color = "gray"
     end
 
 end
+
+@testset "TOML printer" begin
+    res1 = TOML.parse("""
+title = "TOML Example"
+[owner]
+bio = \"\"\"GitHub Cofounder & CEO
+Likes tater tots and beer.\"\"\"
+dob = 1979-05-27T07:32:00Z # First class dates? Why not?
+
+[database]
+server = "192.168.1.1"
+ports = [ 8001, 8001, 8002 ]
+enabled = true
+
+[servers]
+
+  # You can indent as you please. Tabs or spaces. TOML don't care.
+  [servers.alpha]
+  ip = "10.0.0.1"
+  dc = "eqdc10"
+
+  [servers.beta]
+  ip = "10.0.0.2"
+  dc = "eqdc10"
+  country = "中国" # This should be parsed as UTF-8
+
+[clients]
+data = [ ["gamma", "delta"], [1, 2] ] # just an update to make sure parsers support it
+
+  [[products]]
+  name = "Hammer"
+  sku = 738594937
+
+  [[products]]
+  name = "Nail"
+  sku = 284758393
+  color = "gray"
+""")
+    io = IOBuffer()
+    TOML.print(io, res1)
+    seekstart(io)
+    res2 = TOML.parse(io)
+    @test res1 == res2
+
+end
