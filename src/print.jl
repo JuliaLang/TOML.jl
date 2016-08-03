@@ -16,17 +16,17 @@ function printkey(io::IO, keys::Vector{String})
     end
 end
 
-function printvalue(io::IO, value)
+function printvalue(io::IO, value; sorted=false)
     if isa(value, Associative)
-        _print(io, value)
+        _print(io, value, sorted=sorted)
     elseif isa(value, Array)
         Base.print(io, "[")
         for (i, e) in enumerate(value)
             i != 1 && Base.print(io, ", ")
             if isa(e, Associative)
-                _print(io, e)
+                _print(io, e, sorted=sorted)
             else
-                printvalue(io, e)
+                printvalue(io, e, sorted=sorted)
             end
         end
         Base.print(io, "]")
@@ -39,8 +39,14 @@ function printvalue(io::IO, value)
     end
 end
 
-function _print(io::IO, a::Associative, keys=String[])
-    for (key, value) in a
+function _print(io::IO, a::Associative, ks=String[]; sorted=false)
+  akeys = keys(a)
+  if sorted
+      akeys = sort!(collect(akeys))
+  end
+
+  for key in akeys
+        value = a[key]
         # skip tables
         isa(value, Associative) && continue # skip tables
         # skip arrays of tabels
@@ -48,33 +54,34 @@ function _print(io::IO, a::Associative, keys=String[])
 
         printkey(io, [key])
         Base.print(io, " = ") # print separator
-        printvalue(io, value)
+        printvalue(io, value, sorted=sorted)
         Base.print(io, "\n")  # new line?
     end
 
-    for (key, value) in a
+    for key in akeys
+        value = a[key]
         if isa(value, Associative)
             # print table
-            push!(keys, key)
+            push!(ks, key)
             Base.print(io,"[")
-            printkey(io, keys)
+            printkey(io, ks)
             Base.print(io,"]\n")
-            _print(io, value, keys)
-            pop!(keys)
+            _print(io, value, ks, sorted=sorted)
+            pop!(ks)
         elseif isa(value, Array) && length(value)>0 && isa(value[1], Associative)
             # print array of tables
-            push!(keys, key)
+            push!(ks, key)
             for v in value
                 Base.print(io,"[[")
-                printkey(io, keys)
+                printkey(io, ks)
                 Base.print(io,"]]\n")
                 !isa(v, Associative) && error("array should contain only tables")
-                _print(io, v, keys)
+                _print(io, v, ks, sorted=sorted)
             end
-            pop!(keys)
+            pop!(ks)
         end
     end
 end
 
-print(io::IO, a::Associative) = _print(io, a)
-print(a::Associative) = print(STDOUT, a)
+print(io::IO, a::Associative; sorted=false) = _print(io, a, sorted=sorted)
+print(a::Associative; sorted=false) = print(STDOUT, a, sorted=sorted)
