@@ -67,7 +67,7 @@ function linecol(p::Parser, offset::Int)
     seekstart(p.input)
     line = 0
     cur = 1
-    for (i,l) in enumerate(readlines(p.input))
+    for (i,l) in enumerate(eachline(p.input, chomp=false))
         if cur + length(l) > offset
             return (i, offset - cur + 1)
         end
@@ -570,7 +570,7 @@ function escape(p::Parser, st::Int, multiline::Bool)
                     error(p, st, st+len, "expected $len hex digits after a `$ch` escape")
                     thorw()
                 end
-                if !isxdigit(snum)
+                if !all(isxdigit, snum)
                     error(p, st, st+len, "unknown string escape: `$snum`")
                     thorw()
                 end
