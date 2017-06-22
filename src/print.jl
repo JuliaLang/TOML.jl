@@ -2,7 +2,7 @@
 isbare(c::Char) = 'A' <= c <= 'Z' || 'a' <= c <= 'z' || isdigit(c) || c == '-' || c == '_'
 
 function printkey(io::IO, keys::Vector{String})
-    for (i,k) in enumerate(keys)
+    for (i, k) in enumerate(keys)
         i != 1 && Base.print(io, ".")
         if length(k) == 0
             # empty key
@@ -21,12 +21,12 @@ function printvalue(io::IO, value; sorted=false)
         _print(io, value, sorted=sorted)
     elseif isa(value, Array)
         Base.print(io, "[")
-        for (i, e) in enumerate(value)
+        for (i, x) in enumerate(value)
             i != 1 && Base.print(io, ", ")
-            if isa(e, Associative)
-                _print(io, e, sorted=sorted)
+            if isa(x, Associative)
+                _print(io, x, sorted=sorted)
             else
-                printvalue(io, e, sorted=sorted)
+                printvalue(io, x, sorted=sorted)
             end
         end
         Base.print(io, "]")
@@ -40,12 +40,13 @@ function printvalue(io::IO, value; sorted=false)
 end
 
 function _print(io::IO, a::Associative, ks=String[]; sorted=false)
-  akeys = keys(a)
-  if sorted
-      akeys = sort!(collect(akeys))
-  end
+    akeys = keys(a)
+    if sorted
+        akeys = sort!(collect(akeys))
+    end
+    first_block = true
 
-  for key in akeys
+    for key in akeys
         value = a[key]
         # skip tables
         isa(value, Associative) && continue # skip tables
@@ -56,12 +57,15 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
         Base.print(io, " = ") # print separator
         printvalue(io, value, sorted=sorted)
         Base.print(io, "\n")  # new line?
+        first_block = false
     end
 
     for key in akeys
         value = a[key]
         if isa(value, Associative)
             # print table
+            first_block || println(io)
+            first_block = false
             push!(ks, key)
             Base.print(io,"[")
             printkey(io, ks)
@@ -70,6 +74,8 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
             pop!(ks)
         elseif isa(value, Array) && length(value)>0 && isa(value[1], Associative)
             # print array of tables
+            first_block || println(io)
+            first_block = false
             push!(ks, key)
             for v in value
                 Base.print(io,"[[")
