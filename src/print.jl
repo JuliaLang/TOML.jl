@@ -53,6 +53,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
         # skip arrays of tabels
         isa(value, Array) && length(value)>0 && isa(value[1], Associative) && continue
 
+        Base.print(io, repeat("    ", max(0, length(ks)-1)))
         printkey(io, [key])
         Base.print(io, " = ") # print separator
         printvalue(io, value, sorted=sorted)
@@ -60,6 +61,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
         first_block = false
     end
 
+    indent = repeat("    ", length(ks))
     for key in akeys
         value = a[key]
         if isa(value, Associative)
@@ -67,6 +69,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
             first_block || println(io)
             first_block = false
             push!(ks, key)
+            Base.print(io, indent)
             Base.print(io,"[")
             printkey(io, ks)
             Base.print(io,"]\n")
@@ -78,6 +81,7 @@ function _print(io::IO, a::Associative, ks=String[]; sorted=false)
             first_block = false
             push!(ks, key)
             for v in value
+                Base.print(io, indent)
                 Base.print(io,"[[")
                 printkey(io, ks)
                 Base.print(io,"]]\n")
