@@ -35,18 +35,17 @@ Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)
 
 "Parser error exception"
 mutable struct ParserError <: Exception
-    lo::Int
-    hi::Int
+    lo::Integer
+    hi::Integer
     msg::String
 end
 
 "TOML Parser"
-mutable struct Parser
-    input::IO
+mutable struct Parser{T<:IO}
+    input::T
     errors::Vector{ParserError}
-
-    Parser(input::IO) = new(input, ParserError[])
 end
+Parser(input::T) where {T<:IO} = Parser(input, ParserError[])
 Parser(input::String) = Parser(IOBuffer(input))
 Base.error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
 Base.eof(p::Parser) = eof(p.input)
@@ -62,7 +61,7 @@ function rewind(p::Parser, n=1)
 end
 
 "Converts an offset to a line and a column in the original source."
-function linecol(p::Parser, offset::Int)
+function linecol(p::Parser, offset::Integer)
     pos = position(p)
     seekstart(p.input)
     line = 0
@@ -89,7 +88,7 @@ function nextpos(p::Parser)
 end
 
 "Peeks ahead `n` characters"
-function peek(p::Parser) #, i::Int=0
+function peek(p::Parser)
     eof(p) && return NONE(Char)
     res = Base.peek(p.input)
     res == -1 && return NONE(Char)
@@ -247,7 +246,7 @@ function insertpair(p::Parser, tbl::Table, k, v, st)
 end
 
 "Parses integer with leading zeros and sign"
-function integer(p::Parser, st::Int, allow_leading_zeros::Bool=false, allow_sign::Bool=false)
+function integer(p::Parser, st::Integer, allow_leading_zeros::Bool=false, allow_sign::Bool=false)
     s = Char[]
     if allow_sign
         if consume(p, '-')
@@ -308,7 +307,7 @@ function integer(p::Parser, st::Int, allow_leading_zeros::Bool=false, allow_sign
 end
 
 "Parses boolean"
-function boolean(p::Parser, st::Int)
+function boolean(p::Parser, st::Integer)
     ch = '\x00'
 
     i = 0
@@ -348,7 +347,7 @@ function boolean(p::Parser, st::Int)
 end
 
 "Parse number or datetime"
-function numdatetime(p::Parser, st::Int)
+function numdatetime(p::Parser, st::Integer)
     isfloat = false
 
     nprefix = integer(p, st, false, true)
@@ -404,7 +403,7 @@ function numdatetime(p::Parser, st::Int)
 end
 
 "Parses a datetime value"
-function datetime(p::Parser, syear::String, st::Int)
+function datetime(p::Parser, syear::String, st::Integer)
 
     valid = true
 
@@ -480,7 +479,7 @@ function datetime(p::Parser, syear::String, st::Int)
 end
 
 "Parses a single or multi-line string"
-function basicstring(p::Parser, st::Int)
+function basicstring(p::Parser, st::Integer)
     !expect(p, '"') && return NONE(String)
 
     multiline = false
@@ -498,7 +497,7 @@ function basicstring(p::Parser, st::Int)
 end
 
 "Finish parsing a basic string after the opening quote has been seen"
-function basicstring(p::Parser, st::Int, multiline::Bool)
+function basicstring(p::Parser, st::Integer, multiline::Bool)
     ret = Char[]
     while true
         while multiline && newline(p)
@@ -536,7 +535,7 @@ function basicstring(p::Parser, st::Int, multiline::Bool)
 end
 
 "Reads character(s) after `\\` and transforms them into proper character"
-function escape(p::Parser, st::Int, multiline::Bool)
+function escape(p::Parser, st::Integer, multiline::Bool)
     if multiline && newline(p)
         while whitespace(p) || newline(p) end
         return NONE()
@@ -589,7 +588,7 @@ function escape(p::Parser, st::Int, multiline::Bool)
 end
 
 "Parses a single or multi-line literal string"
-function literalstring(p::Parser, st::Int)
+function literalstring(p::Parser, st::Integer)
     !expect(p, '\'') && return NONE(String)
 
     multiline = false
@@ -606,7 +605,7 @@ function literalstring(p::Parser, st::Int)
     literalstring(p, st, multiline)
 end
 
-function literalstring(p::Parser, st::Int, multiline::Bool)
+function literalstring(p::Parser, st::Integer, multiline::Bool)
     ret = UInt8[]
     while true
         if !multiline && newline(p)
@@ -639,7 +638,7 @@ function literalstring(p::Parser, st::Int, multiline::Bool)
     end
 end
 
-function array(p::Parser, st::Int)
+function array(p::Parser, st::Integer)
     !expect(p, '[') && return NONE()
     ret = Any[]
     rettype = Any
@@ -676,7 +675,7 @@ function array(p::Parser, st::Int)
     return SOME(convert(Vector{rettype}, ret))
 end
 
-function inlinetable(p::Parser, st::Int)
+function inlinetable(p::Parser, st::Integer)
     !expect(p, '{') && return NONE()
     whitespace(p)
 
