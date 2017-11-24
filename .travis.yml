@@ -5,6 +5,13 @@ os:
 julia:
   - 0.6
   - nightly
+env:
+    - ARCH="i686"
+    - ARCH="x86_64"
+matrix:
+  exclude:
+    - os: osx
+      env: ARCH="i686"
 notifications:
   email: false
 script:
