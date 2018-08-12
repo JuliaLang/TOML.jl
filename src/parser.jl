@@ -1,14 +1,12 @@
-NONE() = Nullable()
-NONE(::Type{T}) where {T} = Nullable{T}()
-SOME(v::T) where {T} = Nullable{T}(v)
+import Base: get
 
 "TOML Table"
-mutable struct Table
-    values::Dict{AbstractString,Any}
+struct Table
+    values::Dict{String,Any}
     defined::Bool
 end
 
-Table(defined::Bool) = Table(Dict{AbstractString,Any}(), defined)
+Table(defined::Bool) = Table(Dict{String,Any}(), defined)
 function Base.show(io::IO, tbl::Table, level::Int=1)
     Base.print(io, "T($(tbl.defined)){\n")
     for (k,v) in tbl.values
@@ -34,23 +32,36 @@ Base.getindex(tbl::Table, key::AbstractString) = tbl.values[key]
 Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)
 
 "Parser error exception"
-mutable struct ParserError <: Exception
+struct ParserError <: Exception
     lo::Integer
     hi::Integer
     msg::String
 end
 
 "TOML Parser"
-mutable struct Parser{T<:IO}
-    input::T
+mutable struct Parser{IO_T<:IO}
+    input::IO_T
     errors::Vector{ParserError}
+    charbuffer::Base.GenericIOBuffer{Array{UInt8,1}}
+    currentchar::Char
+
+    Parser(input::IO_T) where {IO_T <: IO}  = new{IO_T}(input, ParserError[], IOBuffer(), ' ')
 end
-Parser(input::T) where {T<:IO} = Parser(input, ParserError[])
 Parser(input::String) = Parser(IOBuffer(input))
 Base.error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
 Base.eof(p::Parser) = eof(p.input)
 Base.position(p::Parser) = position(p.input)+1
-Base.read(p::Parser) = read(p.input, Char)
+Base.write(p::Parser, x) = write(p.charbuffer, x)
+Base.read(p::Parser) = p.currentchar = read(p.input, Char)
+
+NONE() = nothing
+NONE(::Type{T}) where {T} = nothing
+SOME(v::T) where {T} = v
+NONE(::Type{String}, p::Parser) = (take!(p.charbuffer); nothing)
+SOME(::Type{String}, p::Parser) = String(take!(p.charbuffer))
+isnull(x) = x === nothing
+get(x) = (@assert !isnull(x); x)
+get(x, v) = !isnull(x) ? x : v
 
 "Rewind parser input on `n` characters."
 function rewind(p::Parser, n=1)
@@ -66,7 +77,7 @@ function linecol(p::Parser, offset::Integer)
     seekstart(p.input)
     line = 0
     cur = 1
-    for (i,l) in enumerate(eachline(p.input, chomp=false))
+    for (i,l) in enumerate(eachline(p.input, keep=true))
         if cur + length(l) > offset
             return (i, offset - cur + 1)
         end
@@ -80,35 +91,30 @@ end
 "Determine next position in parser input"
 function nextpos(p::Parser)
     pos = position(p)
-    mark(p.input)
-    skip(p.input, 1)
-    npos = eof(p) ? pos : pos+1
-    reset(p.input)
-    return npos
+    return pos + 1
 end
 
 "Peeks ahead `n` characters"
 function peek(p::Parser)
-    eof(p) && return NONE(Char)
+    eof(p) && return nothing
     res = Base.peek(p.input)
-    res == -1 && return NONE(Char)
-    return SOME(Char(res))
+    res == -1 && return nothing
+    return Char(res)
 end
 
 "Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"
-function consume(p::Parser, ch::Char)
+function consume(p::Parser, ch::AbstractChar)
     eof(p) && return false
-    mark(p.input)
-    if read(p) == ch
-        unmark(p.input)
+    c = peek(p)
+    if get(c) == ch
+        read(p)
         return true
     else
-        reset(p.input)
         return false
     end
 end
 
-function expect(p::Parser, ch::Char)
+function expect(p::Parser, ch::AbstractChar)
     consume(p, ch) && return true
     lo = position(p)
     if eof(p)
@@ -182,7 +188,6 @@ function keyname(p)
     elseif consume(p, '\'')
         literalstring(p, s, false)
     else
-        ret = Char[]
         while !eof(p)
             ch = read(p)
             if  'a' <= ch <= 'z' ||
@@ -190,18 +195,18 @@ function keyname(p)
                 isdigit(ch)      ||
                 ch == '_'        ||
                 ch == '-'
-                push!(ret, ch)
+                write(p, ch)
             else
                 rewind(p)
                 break
             end
         end
-        SOME(String(ret))
+        SOME(String, p)
     end
 
     if !isnull(key) && isempty(get(key))
         error(p, s, s, "expected a key but found an empty string")
-        key = NONE(String)
+        key = NONE(String, p)
     end
     return key
 end
@@ -247,40 +252,39 @@ end
 
 "Parses integer with leading zeros and sign"
 function integer(p::Parser, st::Integer, allow_leading_zeros::Bool=false, allow_sign::Bool=false)
-    s = Char[]
     if allow_sign
         if consume(p, '-')
-            push!(s, '-')
+            write(p, '-')
         elseif consume(p, '+')
-            push!(s, '+')
+            write(p, '+')
         end
     end
     nch = peek(p)
     if isnull(nch)
         pos = nextpos(p)
         error(p, pos, pos, "expected start of a numeric literal")
-        return NONE(String)
+        return NONE(String, p)
     else
         ch = get(nch)
         if isdigit(ch)
             c = read(p)
             if c == '0' && !allow_leading_zeros
-                push!(s, '0')
+                write(p, '0')
                 nch = peek(p)
                 if !isnull(nch)
                     ch = get(nch)
                     if isdigit(ch)
                         error(p, st, position(p), "leading zeroes are not allowed")
-                        return NONE(String)
+                        return NONE(String, p)
                     end
                 end
             elseif isdigit(c)
-                push!(s, c)
+                write(p, c)
             end
         else
             # non-digit
             error(p, st, position(p), "expected a digit, found `$ch`")
-            return NONE(String)
+            return NONE(String, p)
         end
     end
 
@@ -288,7 +292,7 @@ function integer(p::Parser, st::Integer, allow_leading_zeros::Bool=false, allow_
     while !eof(p)
         ch = read(p)
         if isdigit(ch)
-            push!(s, ch)
+            write(p, ch)
             underscore = false
         elseif ch == '_' && !underscore
             underscore = true
@@ -300,9 +304,9 @@ function integer(p::Parser, st::Integer, allow_leading_zeros::Bool=false, allow_
     if underscore
         pos = nextpos(p)
         error(p, pos, pos, "numeral cannot end with an underscore")
-        NONE(String)
+        NONE(String, p)
     else
-        length(s) == 0 ? NONE(String) : SOME(String(s))
+        p.charbuffer.ptr == 1 ? NONE(String, p) : SOME(String, p)
     end
 end
 
@@ -360,7 +364,7 @@ function numdatetime(p::Parser, st::Integer)
         isnull(ndecimal) && return NONE()
         SOME(get(ndecimal))
     else
-        NONE(String)
+        NONE(String, p)
     end
 
     exponent = if consume(p,'e') || consume(p,'E')
@@ -369,7 +373,7 @@ function numdatetime(p::Parser, st::Integer)
         isnull(nexponent) && return NONE()
         SOME(get(nexponent))
     else
-        NONE(String)
+        NONE(String, p)
     end
 
     pend = nextpos(p)
@@ -467,7 +471,7 @@ function datetime(p::Parser, syear::String, st::Integer)
     end
 
     if valid
-        dt = DateTime(year, month, day,
+        dt = Dates.DateTime(year, month, day,
                 hour + (tzsign ? tzhour : -tzhour),
                 minute + (tzsign ? tzminute : -tzminute),
                 second, msec)
@@ -480,7 +484,7 @@ end
 
 "Parses a single or multi-line string"
 function basicstring(p::Parser, st::Integer)
-    !expect(p, '"') && return NONE(String)
+    !expect(p, '"') && return NONE(String, p)
 
     multiline = false
 
@@ -498,37 +502,38 @@ end
 
 "Finish parsing a basic string after the opening quote has been seen"
 function basicstring(p::Parser, st::Integer, multiline::Bool)
-    ret = Char[]
     while true
         while multiline && newline(p)
-            push!(ret, '\n')
+            write(p, '\n')
         end
-        pos = position(p)
         if eof(p)
+            pos = position(p)
             error(p, st, pos, "unterminated string literal")
-            return NONE(String)
+            return NONE(String, p)
         else
             ch = read(p)
             if ch == '"'
                 if multiline
                     if !consume(p, '"')
-                        push!(ret, '"')
+                        write(p, '"')
                         continue
                     end
                     if !consume(p, '"')
-                        push!(ret, '"')
-                        push!(ret, '"')
+                        write(p, '"')
+                        write(p, '"')
                         continue
                     end
                 end
-                return SOME(String(ret))
+                return SOME(String, p)
             elseif ch == '\\'
+                pos = position(p)
                 ec = escape(p, pos, multiline)
-                !isnull(ec) && push!(ret, get(ec))
+                !isnull(ec) && write(p, get(ec))
             elseif ch < '\x1f'
+                pos = position(p)
                 error(p, st, pos, "control character `$ch` must be escaped")
             else
-                push!(ret, ch)
+                write(p, ch)
             end
         end
     end
@@ -567,11 +572,11 @@ function escape(p::Parser, st::Integer, multiline::Bool)
             try
                 if length(snum) < len
                     error(p, st, st+len, "expected $len hex digits after a `$ch` escape")
-                    thorw()
+                    NONE()
                 end
                 if !all(isxdigit, snum)
                     error(p, st, st+len, "unknown string escape: `$snum`")
-                    thorw()
+                    NONE()
                 end
                 c = unescape_string(ucstr * snum)[1]
                 SOME(c)
@@ -581,7 +586,7 @@ function escape(p::Parser, st::Integer, multiline::Bool)
                 NONE()
             end
         else
-            error(p, st, position(p), "unknown string escape: `$("\\x"*hex(ch,2))`")
+            error(p, st, position(p), "unknown string escape: `\\x$(UInt8(ch))`")
             NONE()
         end
     end
@@ -589,7 +594,7 @@ end
 
 "Parses a single or multi-line literal string"
 function literalstring(p::Parser, st::Integer)
-    !expect(p, '\'') && return NONE(String)
+    !expect(p, '\'') && return NONE(String, p)
 
     multiline = false
 
@@ -606,33 +611,32 @@ function literalstring(p::Parser, st::Integer)
 end
 
 function literalstring(p::Parser, st::Integer, multiline::Bool)
-    ret = UInt8[]
     while true
         if !multiline && newline(p)
             npos = nextpos(p)
             error(p, st, npos, "literal strings cannot contain newlines")
-            return NONE(String)
+            return NONE(String, p)
         end
         if eof(p)
             error(p, st, position(p), "unterminated string literal")
-            return NONE(String)
+            return NONE(String, p)
         else
             ch = read(p.input, UInt8)
             if ch == 0x27
                 if multiline
                     if !consume(p, '\'')
-                        push!(ret, 0x27)
+                        write(p, 0x27)
                         continue
                     end
                     if !consume(p, '\'')
-                        push!(ret, 0x27)
-                        push!(ret, 0x27)
+                        write(p, 0x27)
+                        write(p, 0x27)
                         continue
                     end
                 end
-                return SOME(String(ret))
+                return SOME(String, p)
             else
-                push!(ret, ch)
+                write(p, ch)
             end
         end
     end
@@ -642,6 +646,7 @@ function array(p::Parser, st::Integer)
     !expect(p, '[') && return NONE()
     ret = Any[]
     rettype = Any
+    expected = Any
     while true
 
         # Break out early if we see the closing bracket
@@ -656,9 +661,7 @@ function array(p::Parser, st::Integer)
 
         pend = nextpos(p)
         valtype = isa(pvalue, Array) ? Array : typeof(pvalue)
-
         expected = rettype === Any ? valtype : expected
-
         if valtype != expected
             error(p, pstart, pend, "expected type `$expected`, found type `$valtype`")
         else

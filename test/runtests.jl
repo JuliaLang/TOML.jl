@@ -1,7 +1,7 @@
 using TOML
-import TOML: linecol, whitespace, comment, newline, expect, lookup, Parser, parse
-
-using Base.Test
+import TOML: linecol, whitespace, comment, newline, expect, lookup, Parser, parse, table2dict
+import Dates
+using Test
 
 macro testval(s, v)
     f = "foo = $s"
@@ -28,7 +28,7 @@ macro fail(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST FAIL: ", escape_string($teststr))
@@ -62,7 +62,7 @@ macro fail(s...)
         local $ppvar = parse($pvar)
         $dbgexp
         $errtsts
-        @test isnull($ppvar)
+        @test $ppvar === nothing
     end
 end
 
@@ -77,7 +77,7 @@ macro success(s...)
     pvar = :pv
     ppvar = :ppv
 
-    # debuging report
+    # debugging report
     dbgexp = if debug
         quote
             println("\nTEST SUCCESS: ", escape_string($teststr))
@@ -100,7 +100,7 @@ macro success(s...)
         local $pvar = Parser($teststr)
         local $ppvar = parse($pvar)
         $dbgexp
-        @test !isnull($ppvar)
+        @test $ppvar !== nothing
     end
 end
 
@@ -357,10 +357,10 @@ trimmed in raw strings.
 
     @testset "Datetime" begin
 
-        @testval("2016-09-09T09:09:09Z", DateTime(2016,9,9,9,9,9))
-        @testval("2016-09-09T09:09:09.0Z", DateTime(2016,9,9,9,9,9))
-        @testval("2016-09-09T09:09:09.0+10:00", DateTime(2016,9,9,19,9,9))
-        @testval("2016-09-09T09:09:09.012-02:00", DateTime(2016,9,9,7,9,9,12))
+        @testval("2016-09-09T09:09:09Z", Dates.DateTime(2016,9,9,9,9,9))
+        @testval("2016-09-09T09:09:09.0Z", Dates.DateTime(2016,9,9,9,9,9))
+        @testval("2016-09-09T09:09:09.0+10:00", Dates.DateTime(2016,9,9,19,9,9))
+        @testval("2016-09-09T09:09:09.012-02:00", Dates.DateTime(2016,9,9,7,9,9,12))
 
         @fail("foo = 2016-09-09T09:09:09.Z", "malformed date literal")
         @fail("foo = 2016-9-09T09:09:09Z", "malformed date literal")

@@ -1,15 +1,14 @@
-__precompile__(true)
-
 module TOML
 
+    import Dates
     
     include("parser.jl")
     include("print.jl")
 
     "Convert `TOML.Table` to `Dict{AbstractString,Any}`"
-    function table2dict(tbl::Nullable{Table})
-        isnull(tbl) && return Dict{AbstractString,Any}()
-        return table2dict(get(tbl))
+    function table2dict(tbl::Union{Nothing, Table})
+        tbl == nothing && return Dict{AbstractString,Any}()
+        return table2dict(tbl)
     end
 
     function table2dict(tbl::Table)
