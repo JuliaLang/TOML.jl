@@ -448,6 +448,9 @@ function datetime(p::Parser, syear::String, st::Integer)
         end
         if length(fsec)>0
             msec = Base.parse(Int, String(fsec))
+            if msec > 1000 # truncate msecs
+                msec = round(Int,msec/(10^(ndigits(msec)-3)))
+            end
         end
     end
 
