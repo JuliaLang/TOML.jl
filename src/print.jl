@@ -70,7 +70,8 @@ function _print(io::IO, a::AbstractDict,
         value = a[key]
         if is_table(value)
             push!(ks, key)
-            header = !all(TOML.is_tabular(v) for v in values(value))
+            # print table header if values are not tabular or do not exist
+            header = !all(is_tabular(v) for v in values(value)) || length(value) == 0
             if header
                 # print table
                 first_block || println(io)
