@@ -103,10 +103,10 @@ function peek(p::Parser)
 end
 
 "Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"
-function consume(p::Parser, ch::AbstractChar)
+function consume(p::Parser, ch::AbstractChar...)
     eof(p) && return false
     c = peek(p)
-    if get(c) == ch
+    if get(c) in ch
         read(p)
         return true
     else
@@ -425,7 +425,7 @@ function datetime(p::Parser, syear::String, st::Integer)
     month,  valid = parsetwodigits(p, valid)
     valid = valid && consume(p, '-')
     day,    valid = parsetwodigits(p, valid)
-    valid = valid && consume(p, 'T')
+    valid = valid && consume(p, 't', 'T', ' ')
     hour,   valid = parsetwodigits(p, valid)
     valid = valid && consume(p, ':')
     minute, valid = parsetwodigits(p, valid)
@@ -460,7 +460,7 @@ function datetime(p::Parser, syear::String, st::Integer)
     tzplus = true
     tzminus = false
     tzsign = true
-    if valid && !consume(p, 'Z')
+    if valid && !consume(p, 'Z', 'z')
         tzplus = consume(p, '+')
         if !tzplus
             tzminus = consume(p, '-')
