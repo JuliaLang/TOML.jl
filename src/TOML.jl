@@ -1,7 +1,7 @@
 module TOML
 
     import Dates
-    
+
     include("parser.jl")
     include("print.jl")
 

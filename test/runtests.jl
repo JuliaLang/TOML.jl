@@ -358,6 +358,8 @@ trimmed in raw strings.
     @testset "Datetime" begin
 
         @testval("2016-09-09T09:09:09Z", Dates.DateTime(2016,9,9,9,9,9))
+        @testval("2016-09-09 09:09:09Z", Dates.DateTime(2016,9,9,9,9,9))
+        @testval("2016-09-09t09:09:09z", Dates.DateTime(2016,9,9,9,9,9))
         @testval("2016-09-09T09:09:09.0Z", Dates.DateTime(2016,9,9,9,9,9))
         @testval("2016-09-09T09:09:09.0+10:00", Dates.DateTime(2016,9,9,19,9,9))
         @testval("2016-09-09T09:09:09.012-02:00", Dates.DateTime(2016,9,9,7,9,9,12))
@@ -367,6 +369,8 @@ trimmed in raw strings.
         @fail("foo = 2016-09-09T09:09:09+2:00", "malformed date literal")
         @fail("foo = 2016-09-09T09:09:09-2:00", "malformed date literal")
         @fail("foo = 2016-09-09T09:09:09Z-2:00", "expected a newline after a key")
+        @fail("foo = 2016-09-09s09:09:09Z", "malformed date literal")
+        @fail("foo = 2016-09-09 09:09:09x", "malformed date literal")
 
     end
 
