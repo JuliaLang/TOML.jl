@@ -93,7 +93,7 @@ function _print(io::IO, a::AbstractDict,
                 Base.print(io,"[[")
                 printkey(io, ks)
                 Base.print(io,"]]\n")
-                !isa(v, AbstractDict) && error("array should contain only tables")
+                !isa(v, AbstractDict) && Base.error("array should contain only tables")
                 _print(io, v, ks, indent=indent+1, sorted=sorted, by=by)
             end
             pop!(ks)
