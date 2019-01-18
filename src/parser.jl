@@ -48,7 +48,7 @@ mutable struct Parser{IO_T<:IO}
     Parser(input::IO_T) where {IO_T <: IO}  = new{IO_T}(input, ParserError[], IOBuffer(), ' ')
 end
 Parser(input::String) = Parser(IOBuffer(input))
-Base.error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
+error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
 Base.eof(p::Parser) = eof(p.input)
 Base.position(p::Parser) = position(p.input)+1
 Base.write(p::Parser, x) = write(p.charbuffer, x)
