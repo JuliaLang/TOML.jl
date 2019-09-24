@@ -1,3 +1,5 @@
+**This package is no longer maintained. It is superseded by a standard library package [JuliaStdlibs/TOML](https://github.com/JuliaStdlibs/TOML.jl).**
+
 # TOML.jl
 
 A [TOML v0.4.0](https://github.com/toml-lang/toml) parser for Julia.
