@@ -10,7 +10,7 @@ A [TOML v0.4.0](https://github.com/toml-lang/toml) parser for Julia.
 
 From julia package manager REPL
 
-`(v1.0) pkg> add https://github.com/wildart/TOML.jl.git`
+`(v1.0) pkg> add https://github.com/JuliaLang/TOML.jl.git`
 
 ## Basic Usage
 
