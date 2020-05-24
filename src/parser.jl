@@ -1007,7 +1007,8 @@ function parse_string_start(l::Parser, quoted::Bool)::Err{String}
         if !accept(l, c)
             return ""
         end
-        accept(l, '\n') # Eat third quote
+        accept(l, '\r')
+        accept(l, '\n')
         multiline = true
     end
     return parse_string_continue(l, multiline, quoted)
