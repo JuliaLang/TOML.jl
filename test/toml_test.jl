@@ -84,7 +84,11 @@ end
 @test check_valid("nested-inline-table-array")
 @test check_valid("newline-crlf")
 @test check_valid("newline-lf")
-@test check_valid("raw-multiline-string")
+if Sys.iswindows()
+    @test check_valid("raw-multiline-string-win")
+else
+    @test check_valid("raw-multiline-string")
+end
 @test check_valid("raw-string")
 @test check_valid("right-curly-brace-after-boolean")
 @test check_valid("string-empty")
