@@ -34,6 +34,19 @@ const EOF_CHAR = typemax(Char)
 const TOMLDict  = Dict{String, Any}
 const TOMLArray = Vector{Any}
 
+#=
+# Useful in case we want to type narrow an array
+function push!!(v::Vector{T}, x) where {T}
+    if x isa T || typeof(x) === T # better codegen?
+        push!(v, x)
+        return v
+    else
+        new = similar(v, Base.promote_typejoin(T, typeof(x)))
+        copyto!(new, v)
+        return push!!(new, x)
+    end
+end
+=#
 
 ##########
 # Parser #
@@ -140,6 +153,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     empty!(p.defined_tables)
     p.filepath = filepath
     startup(p)
+    return p
 end
 
 ##########
@@ -294,7 +308,7 @@ function point_to_line(str::AbstractString, a::Int, b::Int, context)
     pos = something(findprev('\n', str, prevind(str, a)), 0) + 1
     io1 = IOContext(IOBuffer(), context)
     io2 = IOContext(IOBuffer(), context)
-    while true 
+    while true
         if a <= pos <= b
             printstyled(io2, "^"; color=:light_green)
         else
@@ -375,7 +389,7 @@ function accept_batch(l::Parser, f::F)::Bool where {F}
 end
 
 # Return true if `f` was accepted `n` times
-@inline function accept_n(l::Parser, n, f::F)::Bool where {F}
+@inline function accept_n(l::Parser, n::Integer, f::F)::Bool where {F}
     for i in 1:n
         if !accept(l, f)
             return false
@@ -637,18 +651,24 @@ end
 #########
 
 function parse_array(l::Parser)::Err{TOMLArray}
+    # array = l.narrow_array_type ? Union{}[] : []
     array = Any[]
     push!(l.static_arrays, array)
     skip_ws_nl(l)
     accept(l, ']') && return array
     while true
+        # TODO: When erroring we should commit the so far parsed array to the
+        # current active table
         v = @try parse_value(l)
-        push!(array, v)
+        # array = push!!(array, v)
+        array = push!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
         skip_ws_nl(l)
         comma = accept(l, ',')
         skip_ws_nl(l)
-        accept(l, ']') && return array
+        if accept(l, ']')
+            return array
+        end
         if !comma
             return ParserError(ErrExpectedCommaBetweenItemsArray)
         end
@@ -1080,7 +1100,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
     end
 end
 
-function take_chunks(l::Parser, unescape::Bool)::String
+ function take_chunks(l::Parser, unescape::Bool)::String
     nbytes = sum(length, l.chunks)
     str = Base._string_n(nbytes)
     offset = 1

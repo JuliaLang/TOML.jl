@@ -102,6 +102,8 @@ end
 # TODO: Add more dedicated value tests
 
 @testset "String" begin
+    @failval("\"foooo", Internals.ErrUnexpectedEndString)
+
     #=
     Found these examples of string tests somewhere
     quot0=""" """    # valid
