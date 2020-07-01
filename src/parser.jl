@@ -69,7 +69,7 @@ mutable struct Parser
     # [a.b.c.d] doesn't "define" the table [a]
     # so keys can later be added to [a], therefore
     # we need to keep track of what tables are
-    # actualyl "defined
+    # actually defined
     defined_tables::IdSet{TOMLDict}
 
     # The table we will finally return to the user
@@ -149,12 +149,12 @@ throw_internal_error(msg) = error("internal TOML parser error: $msg")
 # all the way and have this error be returned to the user
 # if the parse is called with `raise=false`. This macro
 # makes that easier
-@eval macro $(Symbol("try"))(expr)
-    :(
-        v = $(esc(expr));
-        v isa $ParserError && return v;
-        v;
-    )
+@eval macro $(:var"try")(expr)
+    return quote
+        v = $(esc(expr))
+        v isa ParserError && return v
+        v
+    end
 end
 
 # TODO: Check all of these are used
@@ -465,7 +465,7 @@ end
 function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
     for i in 1:length(dotted_keys)
         key = dotted_keys[i]
-        d = get!(() -> TOMLDict(), d, key)
+        d = get!(TOMLDict, d, key)
         if d isa TOMLArray
             d = d[end]
         end
@@ -697,7 +697,7 @@ end
 
 isvalid_hex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 isvalid_oct(c::Char) = '0' <= c <= '7'
-isvalid_binary(c::Char) = '0' <= c <= '2'
+isvalid_binary(c::Char) = '0' <= c <= '1'
 
 const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
 # This function eats things accepted by `f` but also allows eating `_` in between
@@ -813,7 +813,6 @@ function parse_number_or_date_start(l::Parser)
         contains_underscore |= read_underscore
     end
     if !ok_end_value(peek(l))
-        error()
         return ParserError(ErrLeadingZeroNotAllowedInteger)
     end
     return parse_float(l, read_underscore)
@@ -824,7 +823,6 @@ function take_string_or_substring(l, contains_underscore)::Union{String, SubStri
     subs = take_substring(l)
     # Need to pass a AbstractString to `parse` so materialize it in case it
     # contains underscore.
-    #                                   vvvvvvv <- this looksl like a dude flipping the bird
     return contains_underscore ? filter(!=('_'), subs) : subs
 end
 
@@ -843,6 +841,7 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int}
         e isa Base.OverflowError && return(ParserError(ErrOverflowError))
         error("internal parser error: did not correctly discredit $(repr(s)) as an int")
     end
+    return v
 end
 
 
