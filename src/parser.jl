@@ -1,52 +1,31 @@
 using Base: IdSet
 
-if !@isdefined HAVE_DATES
-    error("need to set the variable `HAVE_DATES` to determine if the Dates stdlib is available")
+# In case we do not have the Dates stdlib available
+# we parse DateTime into these internal structs,
+# note that these do not do any argument checking
+struct Date
+    year::Int
+    month::Int
+    day::Int
 end
-
-if HAVE_DATES
-    using Dates
-else
-    # In case we do not have the Dates stdlib available
-    # we parse DateTime into these internal structs,
-    # note that these do not do any argument checking
-    struct Date
-        year::Int
-        month::Int
-        day::Int
-    end
-    struct Time
-        hour::Int
-        minute::Int
-        second::Int
-        ms::Int
-    end
-    struct DateTime
-        date::Date
-        time::Time
-    end
-    DateTime(y, m, d, h, mi, s, ms) =
-        DateTime(Date(y,m,d), Time(h, mi, s, ms))
+struct Time
+    hour::Int
+    minute::Int
+    second::Int
+    ms::Int
 end
+struct DateTime
+    date::Date
+    time::Time
+end
+DateTime(y, m, d, h, mi, s, ms) =
+    DateTime(Date(y,m,d), Time(h, mi, s, ms))
 
 const EOF_CHAR = typemax(Char)
 
 const TOMLDict  = Dict{String, Any}
 const TOMLArray = Vector{Any}
 
-#=
-# Useful in case we want to type narrow an array
-function push!!(v::Vector{T}, x) where {T}
-    if x isa T || typeof(x) === T # better codegen?
-        push!(v, x)
-        return v
-    else
-        new = similar(v, Base.promote_typejoin(T, typeof(x)))
-        copyto!(new, v)
-        return push!!(new, x)
-    end
-end
-=#
 
 ##########
 # Parser #
@@ -98,11 +77,14 @@ mutable struct Parser
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
+
+    # Get's populated with the Dates stdlib if it exists
+    Dates::Union{Module, Nothing}
 end
 
+const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 function Parser(str::String; filepath=nothing)
     root = TOMLDict()
-    # Can haz name initialization?
     l = Parser(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -119,7 +101,8 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-           )
+            get(Base.loaded_modules, DATES_PKGID, nothing),
+        )
     startup(l)
     return l
 end
@@ -212,8 +195,6 @@ end
     ErrUnderscoreNotSurroundedByDigits
     ErrLeadingZeroNotAllowedInteger
     ErrOverflowError
-    ErrIntegerParsingError
-    ErrFloatParsingError
     ErrLeadingDot
     ErrNoTrailingDigitAfterDot
     ErrTrailingUnderscoreNumber
@@ -227,9 +208,7 @@ end
     ErrUnexpectedEndString
     ErrInvalidEscapeCharacter
     ErrInvalidUnicodeScalar
-
 end
-
 
 const err_message = Dict(
     ErrTrailingCommaInlineTable             => "trailing comma not allowed in inline table",
@@ -259,7 +238,13 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
+    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidEscapeCharacter               => "invalid escape character",
 )
+
+for err in instances(ErrorType)
+    @assert haskey(err_message, err) "$err does not have an error message"
+end
 
 mutable struct ParserError <: Exception
     type::ErrorType
@@ -389,7 +374,7 @@ function accept_batch(l::Parser, f::F)::Bool where {F}
 end
 
 # Return true if `f` was accepted `n` times
-@inline function accept_n(l::Parser, n::Integer, f::F)::Bool where {F}
+@inline function accept_n(l::Parser, n, f::F)::Bool where {F}
     for i in 1:n
         if !accept(l, f)
             return false
@@ -651,24 +636,18 @@ end
 #########
 
 function parse_array(l::Parser)::Err{TOMLArray}
-    # array = l.narrow_array_type ? Union{}[] : []
     array = Any[]
     push!(l.static_arrays, array)
     skip_ws_nl(l)
     accept(l, ']') && return array
     while true
-        # TODO: When erroring we should commit the so far parsed array to the
-        # current active table
         v = @try parse_value(l)
-        # array = push!!(array, v)
-        array = push!(array, v)
+        push!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
         skip_ws_nl(l)
         comma = accept(l, ',')
         skip_ws_nl(l)
-        if accept(l, ']')
-            return array
-        end
+        accept(l, ']') && return array
         if !comma
             return ParserError(ErrExpectedCommaBetweenItemsArray)
         end
@@ -754,7 +733,7 @@ function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=tru
     end
 end
 
-function parse_number_or_date_start(l::Parser)::Err{Union{Int, Float64, Date, Time, DateTime}}
+function parse_number_or_date_start(l::Parser)
     integer = true
     read_dot = false
 
@@ -778,7 +757,7 @@ function parse_number_or_date_start(l::Parser)::Err{Union{Int, Float64, Date, Ti
     # Zero is allowed to follow by a end value char, a base x, o, b or a dot
     readed_zero = false
     if accept(l, '0')
-        readed_zero = true # Intentional bad grammer to remove the ambiguity in "read"...
+        readed_zero = true # Intentional bad grammar to remove the ambiguity in "read"...
         if ok_end_value(peek(l))
             return 0
         elseif accept(l, 'x')
@@ -900,9 +879,9 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 =#
 
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
-function parse_datetime(l)::Err{Union{DateTime, Date}}
+function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = parse_int(l, false)
+    year = parse_int(l, false)::Int
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
@@ -925,10 +904,10 @@ function parse_datetime(l)::Err{Union{DateTime, Date}}
     if ok_end_value(peek(l))
         if (read_space = accept(l, ' '))
             if !isdigit(peek(l))
-                return Date(year, month, day)
+                return try_return_date(l, year, month, day)
             end
         else
-            return Date(year, month, day)
+            return try_return_date(l, year, month, day)
         end
     end
     if !read_space
@@ -949,21 +928,52 @@ function parse_datetime(l)::Err{Union{DateTime, Date}}
     end
 
     # The DateTime parser verifies things like leap year for us
-    try
-        DateTime(year, month, day,
-                 h, m, s, ms)
-    catch e
-         ParserError(ErrParsingDateTime)
+    return try_return_datetime(l, year, month, day, h, m, s, ms)
+end
+
+function try_return_datetime(p, year, month, day, h, m, s, ms)
+    if p.Dates !== nothing
+        try
+            return p.Dates.DateTime(year, month, day, h, m, s, ms)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return DateTime(year, month, day, h, m, s, ms)
     end
 end
 
-function parse_local_time(l::Parser)::Err{Time}
+function try_return_date(p, year, month, day)
+    if p.Dates !== nothing
+        try
+            return p.Dates.Date(year, month, day)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return Date(year, month, day)
+    end
+end
+
+function parse_local_time(l::Parser)
     h = parse_int(l, false)
     h in 0:23 || return ParserError(ErrParsingDateTime)
     _, m, s, ms = @try _parse_local_time(l, true)
     # TODO: Could potentially parse greater accuracy for the
     # fractional seconds here.
-    return Time(h, m, s, ms)
+    return try_return_time(l, h, m, s, ms)
+end
+
+function try_return_time(p, h, m, s, ms)
+    if p.Dates !== nothing
+        try
+            return p.Dates.Time(h, m, s, ms)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return Time(h, m, s, ms)
+    end
 end
 
 function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int}}
@@ -1020,15 +1030,15 @@ end
 ##########
 
 function parse_string_start(l::Parser, quoted::Bool)::Err{String}
-    # Have eaten a `'` if `quoted is true, otherwise have eaten a `"`
+    # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
     multiline = false
     c = quoted ? '\'' : '"'
     if accept(l, c) # Eat second quote
         if !accept(l, c)
             return ""
         end
-        accept(l, '\r')
-        accept(l, '\n')
+        accept(l, '\r') # Eat third quote
+        accept(l, '\n') # Eat third quote
         multiline = true
     end
     return parse_string_continue(l, multiline, quoted)
@@ -1058,13 +1068,12 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
         end
         next_slash = peek(l) == '\\'
         if !next_slash
-            # TODO: This is not true, could be """"foo""""
+            # TODO: Doesn't handle values with e.g. format `""""str""""`
             if accept(l, q) && (!multiline || (accept(l, q) && accept(l, q)))
                 push!(l.chunks, start_chunk:(l.prevpos-offset-1))
                 return take_chunks(l, contains_backslash)
             end
         end
-        # This shouldn't be needed?
         c = eat_char(l) # eat the character we stopped at
         next_slash = c == '\\'
         if next_slash && !quoted
@@ -1100,7 +1109,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
     end
 end
 
- function take_chunks(l::Parser, unescape::Bool)::String
+function take_chunks(l::Parser, unescape::Bool)::String
     nbytes = sum(length, l.chunks)
     str = Base._string_n(nbytes)
     offset = 1
