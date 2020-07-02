@@ -160,8 +160,8 @@ end
 # TODO: Check all of these are used
 @enum ErrorType begin
 
-    # Toplevl #
-    ###########
+    # Toplevel #
+    ############
     ErrRedefineTableArray
     ErrExpectedNewLineKeyValue
     ErrAddKeyToInlineTable
@@ -181,6 +181,7 @@ end
 
     # Values #
     ##########
+    ErrUnexpectedEofExpectedValue
     ErrUnexpectedStartOfValue
     ErrGenericValueError
 
@@ -240,6 +241,7 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
+    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
 )
 
 for err in instances(ErrorType)
@@ -286,6 +288,7 @@ end
 # str1 = "foobar"
 # str2 = "^^^"
 # used to show the interval where an error happened
+# Right now, it is only called with a == b
 function point_to_line(str::AbstractString, a::Int, b::Int, context)
     @assert b >= a
     a = thisind(str, a)
@@ -314,8 +317,10 @@ function Base.showerror(io::IO, err::ParserError)
     printstyled(io, f, ':', err.line, ':', err.column; bold=true)
     printstyled(io, " error: "; color=Base.error_color())
     println(io, format_error_message_for_err_type(err))
-
-    str1, err1 = point_to_line(err.str, err.pos, err.pos, io)
+    # In this case we want the arrow to point one character
+    pos = err.pos
+    err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
+    str1, err1 = point_to_line(err.str, pos, pos, io)
     # See https://github.com/JuliaLang/julia/issues/36015
     format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
     println(io, "$format_fixer  ", str1)
@@ -330,10 +335,10 @@ end
 @inline function next_char(l::Parser)::Char
     state = iterate(l.str, l.pos)
     l.prevpos = l.pos
+    l.column += 1
     state === nothing && return EOF_CHAR
     c, pos = state
     l.pos = pos
-    l.column += 1
     if c == '\n'
         l.line += 1
         l.column = 0
@@ -449,7 +454,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         @try parse_table(l)
         skip_ws_comment(l)
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
-            # TODO: Not really KeyValue error
+            eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     else
@@ -457,6 +462,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
         if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+            c = eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
     end
@@ -779,7 +785,11 @@ function parse_number_or_date_start(l::Parser)
     read_underscore = false
     read_digit = accept(l, isdigit)
     if !readed_zero && !read_digit
-        return ParserError(ErrUnexpectedStartOfValue)
+        if peek(l) == EOF_CHAR
+            return ParserError(ErrUnexpectedEofExpectedValue)
+        else
+            return ParserError(ErrUnexpectedStartOfValue)
+        end
     end
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
     read_underscore |= contains_underscore
@@ -813,7 +823,8 @@ function parse_number_or_date_start(l::Parser)
         contains_underscore |= read_underscore
     end
     if !ok_end_value(peek(l))
-        return ParserError(ErrLeadingZeroNotAllowedInteger)
+        eat_char(l)
+        return ParserError(ErrGenericValueError)
     end
     return parse_float(l, read_underscore)
 end
