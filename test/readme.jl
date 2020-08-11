@@ -160,6 +160,15 @@ err = tryparsestring(str)
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
 str = """
+# THIS WILL NOT WORK
+spelling = "favorite"
+"spelling" = "favourite"
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrKeyAlreadyHasValue
+
+str = """
 3.14159 = "pi"
 """
 @test parsestring(str) == Dict("3" => Dict("14159" => "pi"))
@@ -353,12 +362,14 @@ d = parsestring(str)
 str = """
 int5 = 1_000
 int6 = 5_349_221
-int7 = 1_2_3_4_5     # VALID but discouraged
+int7 = 53_49_221  # Indian number system grouping
+int8 = 1_2_3_4_5  # VALID but discouraged
 """
 d = parsestring(str)
 @test d["int5"] == 1_000
 @test d["int6"] == 5_349_221
-@test d["int7"] == 1_2_3_4_5
+@test d["int7"] == 53_49_221
+@test d["int8"] == 1_2_3_4_5
 
 str = """
 # hexadecimal with prefix `0x`
@@ -380,6 +391,31 @@ d = parsestring(str)
 @test d["oct1"] == 0o01234567
 @test d["oct2"] == 0o755
 @test d["bin1"] == 0b11010110
+
+#Arbitrary 64-bit signed integers (from −2^63 to 2^63−1) should be accepted and
+#handled losslessly. If an integer cannot be represented losslessly, an error
+#must be thrown.
+str = """
+low = -9_223_372_036_854_775_808
+high = 9_223_372_036_854_775_807
+"""
+d = parsestring(str)
+@test d["low"] == -9_223_372_036_854_775_808
+@test d["high"] == 9_223_372_036_854_775_807
+
+str = """
+toolow = -9_223_372_036_854_775_809
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrOverflowError
+
+str = """
+toohigh = 9_223_372_036_854_775_808
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrOverflowError
 
 end
 
@@ -410,6 +446,31 @@ d = parsestring(str)
 @test d["flt6"] == -2E-2
 @test d["flt7"] == 6.626e-34
 @test d["flt8"] == 224_617.445_991_228
+
+#The decimal point, if used, must be surrounded by at least one digit on each side.
+str = """
+# INVALID FLOATS
+invalid_float_1 = .7
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrLeadingDot
+
+str = """
+# INVALID FLOATS
+invalid_float_2 = 7.
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrNoTrailingDigitAfterDot
+
+str = """
+# INVALID FLOATS
+invalid_float_3 = 3.e+20
+"""
+err = tryparsestring(str)
+@test err isa ParserError
+@test err.type == Internals.ErrNoTrailingDigitAfterDot
 
 str = """
 # infinity
@@ -450,7 +511,7 @@ str = "odt1 = 1979-05-27T07:32:00.99999Z"
 # Truncated milliseconds
 @test parsestring(str)["odt1"] == parse(DateTime, "1979-05-27T07:32:00.999Z", dateformat"yyyy-mm-ddTHH:MM:SS.sZ")
 
-# Julia doesn't support offset dateti,e
+# Julia doesn't support offset datetimes
 str = "odt2 = 1979-05-27T00:32:00-07:00"
 err = tryparsestring(str)
 @test_broken err isa Dict
@@ -462,6 +523,10 @@ err = tryparsestring(str)
 @test_broken err isa Dict
 @test err isa Internals.ParserError
 @test err.type == Internals.ErrOffsetDateNotSupported
+
+str = "odt4 = 1979-05-27 07:32:00Z"
+d = parsestring(str)
+@test d["odt4"] == parse(DateTime, "1979-05-27 07:32:00Z", dateformat"yyyy-mm-dd HH:MM:SSZ")
 
 end
 
