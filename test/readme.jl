@@ -365,12 +365,12 @@ int6 = +0
 """
 @test roundtrip(str)
 d = parsestring(str)
-@test d["int1"] === 99
-@test d["int2"] === 42
-@test d["int3"] === 0
-@test d["int4"] === -17
-@test d["int5"] === 0
-@test d["int6"] === 0
+@test d["int1"] === Int64(99)
+@test d["int2"] === Int64(42)
+@test d["int3"] === Int64(0)
+@test d["int4"] === Int64(-17)
+@test d["int5"] === Int64(0)
+@test d["int6"] === Int64(0)
 
 
 str = """
