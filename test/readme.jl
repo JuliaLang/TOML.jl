@@ -618,7 +618,7 @@ d = parsestring(str)
 @test d["nested_array_of_int"] == [[1,2], [3,4,5]]
 @test d["nested_mixed_array"] == [[1,2], ["a", "b", "c"]]
 @test d["string_array"] == ["all", "strings", "are the same", "type"]
-@test all(d["numbers"] .=== Any[0.1, 0.2, 0.5, 1, 2, 5])
+@test all(d["numbers"] .=== Any[0.1, 0.2, 0.5, Int64(1), Int64(2), Int64(5)])
 @test d["contributors"] == [
     "Foo Bar <foo@example.com>",
     Dict("name" => "Baz Qux",
