@@ -83,6 +83,7 @@ mutable struct Parser
 end
 
 const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
+
 function Parser(str::String; filepath=nothing)
     root = TOMLDict()
     l = Parser(
@@ -321,10 +322,15 @@ function Base.showerror(io::IO, err::ParserError)
     pos = err.pos
     err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
     str1, err1 = point_to_line(err.str, pos, pos, io)
-    # See https://github.com/JuliaLang/julia/issues/36015
-    format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
-    println(io, "$format_fixer  ", str1)
-    print(io, "$format_fixer  ", err1)
+    @static if VERSION <= v"1.6.0-DEV.121"
+        # See https://github.com/JuliaLang/julia/issues/36015
+        format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+        println(io, "$format_fixer  ", str1)
+        print(io, "$format_fixer  ", err1)
+    else
+        println(io, "  ", str1)
+        print(io, "  ", err1)
+    end
 end
 
 
