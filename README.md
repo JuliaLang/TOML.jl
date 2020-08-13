@@ -8,31 +8,3 @@ A [TOML v1.0.0](https://github.com/toml-lang/toml) parser for Julia.
 
 *Note:*  This is a Julia standard library and does not need to be explicitly
 installed.
-
-## Basic Usage
-
-```julia
-
-julia> import TOML
-
-julia> TOML.parse("""
-       name = "value"
-       """)
-Dict{AbstractString,Any} with 1 entry:
-  "name" => "value"
-
-julia> TOML.parsefile("etc/example.toml")
-```
-
-## Documentation
-```julia
-TOML.print(io::IO, a::AbstractDict)
-```
-Writes a TOML representation to the supplied `IO`.
-
-```julia
-TOML.parse(s::AbstractString)
-TOML.parse(io::IO)
-TOML.parsefile(filename::AbstractString)
-```
-Parses a TOML `AbstractString` or `IO` stream into a nested `Array` or `Dict`.
