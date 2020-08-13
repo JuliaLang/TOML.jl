@@ -22,6 +22,10 @@ jobs:
       script:
         - julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("make.jl")'
       after_success: skip
-
+branches:
+  only:
+    - master
+    - /^release-.*/
+    - /^v[0-9]+\.[0-9]+\.[0-9]+$/ # version tags
 after_success:
   - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
