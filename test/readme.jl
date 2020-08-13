@@ -36,6 +36,7 @@ hosts = [
   "omega"
 ]
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["title"] == "TOML Example"
 @test d["owner"]["name"] == "Tom Preston-Werner"
@@ -67,6 +68,7 @@ str = """
 key = "value"  # This is a comment at the end of a line
 another = "# This is not a comment"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict("key" => "value", "another" => "# This is not a comment")
 
 end # testset
@@ -98,6 +100,7 @@ bare_key = "value"
 bare-key = "value"
 1234 = "value"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "key" => "value",
   "bare_key" => "value",
@@ -112,6 +115,7 @@ str = """
 'key2' = "value"
 'quoted "value"' = "value"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "127.0.0.1" => "value",
   "character encoding" => "value",
@@ -135,6 +139,7 @@ str = """
 str = """
 '' = 'blank'     # VALID but discouraged
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict("" => "blank")
 
 str = """
@@ -144,6 +149,7 @@ physical.shape = "round"
 site."google.com" = true
 """
 
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "name" => "Orange",
   "physical" => Dict("color" => "orange", "shape" => "round"),
@@ -171,6 +177,7 @@ err = tryparsestring(str)
 str = """
 3.14159 = "pi"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict("3" => Dict("14159" => "pi"))
 
 
@@ -181,6 +188,7 @@ fruit.apple.smooth = true
 # So then you can add to the table "fruit" like so:
 fruit.orange = 2
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "fruit" => Dict("orange" => 2,
                   "apple" => Dict("smooth" => true)))
@@ -211,6 +219,7 @@ orange.skin = "thick"
 apple.color = "red"
 orange.color = "orange"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "apple" => Dict("type" => "fruit", "skin" => "thin", "color" => "red"),
   "orange" => Dict("type" => "fruit", "skin" => "thick", "color" => "orange"),
@@ -227,6 +236,7 @@ orange.type = "fruit"
 orange.skin = "thick"
 orange.color = "orange"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "apple" => Dict("type" => "fruit", "skin" => "thin", "color" => "red"),
   "orange" => Dict("type" => "fruit", "skin" => "thick", "color" => "orange"),
@@ -238,16 +248,15 @@ end #testset
 @testset "String" begin
 
 str = """str = "I'm a string. \\"You can quote me\\". Name\\tJos\\u00E9\\nLocation\\tSF." """
+@test roundtrip(str)
 @test parsestring(str) == Dict("str" => "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.")
-
-
-str = """str = "I'm a string. \\"You can quote me\\". Name\\tJos\\u00E9\\nLocation\\tSF." """
 
 str = """str1 = \"\"\"
 Roses are red
 Violets are blue
 \"\"\"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict("str1" => """
 Roses are red
 Violets are blue
@@ -270,6 +279,7 @@ str3 = \"\"\"\\
        the lazy dog.\\
        \"\"\"
 """
+@test roundtrip(str)
 d = @test parsestring(str)["str1"] == parsestring(str)["str2"] == parsestring(str)["str3"]
 
 str = """
@@ -277,6 +287,7 @@ str4 = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"
 str5 = \"\"\"Here are three quotation marks: \"\"\\\".\"\"\"
 str6 = \"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["str4"] == "Here are two quotation marks: \"\". Simple enough."
 @test d["str5"] == "Here are three quotation marks: \"\"\"."
@@ -299,6 +310,7 @@ winpath2 = '\\ServerX\admin$\system32\'
 quoted   = 'Tom "Dubs" Preston-Werner'
 regex    = '<\i\c*\s*>'
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["winpath"] == raw"C:\Users\nodejs\templates"
 @test d["winpath2"] == raw"\\ServerX\admin$\system32\\"
@@ -314,6 +326,7 @@ trimmed in raw strings.
    is preserved.
 '''
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["regex2"] == raw"I [dw]on't need \d{2} apples"
 @test d["lines"] == raw"""
@@ -350,6 +363,7 @@ int4 = -17
 int5 = -0
 int6 = +0
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["int1"] === 99
 @test d["int2"] === 42
@@ -365,6 +379,7 @@ int6 = 5_349_221
 int7 = 53_49_221  # Indian number system grouping
 int8 = 1_2_3_4_5  # VALID but discouraged
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["int5"] == 1_000
 @test d["int6"] == 5_349_221
@@ -384,6 +399,7 @@ oct2 = 0o755 # useful for Unix file permissions
 # binary with prefix `0b`
 bin1 = 0b11010110
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["hex1"] == 0xDEADBEEF
 @test d["hex2"] == 0xdeadbeef
@@ -399,6 +415,7 @@ str = """
 low = -9_223_372_036_854_775_808
 high = 9_223_372_036_854_775_807
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["low"] == -9_223_372_036_854_775_808
 @test d["high"] == 9_223_372_036_854_775_807
@@ -437,6 +454,7 @@ flt6 = -2E-2
 flt7 = 6.626e-34
 flt8 = 224_617.445_991_228
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["flt1"] == +1.0
 @test d["flt2"] == 3.1415
@@ -483,6 +501,7 @@ sf4 = nan  # actual sNaN/qNaN encoding is implementation-specific
 sf5 = +nan # same as `nan`
 sf6 = -nan # valid, actual encoding is implementation-specific
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["sf1"] == Inf
 @test d["sf2"] == Inf
@@ -499,7 +518,8 @@ str = """
 bool1 = true
 bool2 = false
 """
-d =  parsestring(str)
+@test roundtrip(str)
+d = parsestring(str)
 @test d["bool1"] === true
 @test d["bool2"] === false
 
@@ -509,6 +529,7 @@ d =  parsestring(str)
 # Added some fractional digits here
 str = "odt1 = 1979-05-27T07:32:00.99999Z"
 # Truncated milliseconds
+@test roundtrip(str)
 @test parsestring(str)["odt1"] == parse(DateTime, "1979-05-27T07:32:00.999Z", dateformat"yyyy-mm-ddTHH:MM:SS.sZ")
 
 # Julia doesn't support offset datetimes
@@ -525,6 +546,7 @@ err = tryparsestring(str)
 @test err.type == Internals.ErrOffsetDateNotSupported
 
 str = "odt4 = 1979-05-27 07:32:00Z"
+@test roundtrip(str)
 d = parsestring(str)
 @test d["odt4"] == parse(DateTime, "1979-05-27 07:32:00Z", dateformat"yyyy-mm-dd HH:MM:SSZ")
 
@@ -537,6 +559,7 @@ str = """
 ldt1 = 1979-05-27T07:32:00
 ldt2 = 1979-05-27T00:32:00.999999
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["ldt1"] == parse(DateTime, "1979-05-27T07:32:00")
 @test d["ldt2"] == parse(DateTime, "1979-05-27T00:32:00.999")
@@ -549,6 +572,7 @@ end
 str = """
 ld1 = 1979-05-27
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["ld1"] == parse(Date, "1979-05-27")
 
@@ -561,6 +585,7 @@ str = """
 lt1 = 07:32:00
 lt2 = 00:32:00.999999
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["lt1"] == Time(07, 32, 00)
 @test d["lt2"] == Time(00, 32, 00, 999)
@@ -586,7 +611,8 @@ contributors = [
   { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }
 ]
 """
-d =  parsestring(str)
+@test_broken roundtrip(str) # Printer doesn't handle inline tables in arrays?
+d = parsestring(str)
 @test d["integers"] == [1,2,3]
 @test d["colors"] == ["red", "yellow", "green"]
 @test d["nested_array_of_int"] == [[1,2], [3,4,5]]
@@ -610,6 +636,7 @@ integers3 = [
   2, # this is ok
 ]
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d["integers3"] == [1, 2]
 @test d["integers2"] == [1, 2, 3]
@@ -619,18 +646,20 @@ end # testset
 
 @testset "Table" begin
 
-s = """
+str = """
 [table]
 key1 = "some string"
 key2 = "some other string"
 """
-d = parsestring(s)
+@test roundtrip(str)
+d = parsestring(str)
 @test d == Dict("table" => Dict("key2" => "some other string", "key1" => "some string"))
 
 str = """
 [dog."tater.man"]
 type.name = "pug"
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d == Dict("dog" => Dict("tater.man" => Dict("type" => Dict("name" => "pug"))))
 
@@ -640,6 +669,7 @@ str = """
 [ g .  h  . i ]    # same as [g.h.i]
 [ j . "ʞ" . 'l' ]  # same as [j."ʞ".'l']
 """
+@test_broken roundtrip(str) # Printer removes empty tables right now
 d = parsestring(str)
 @test d == Dict(
   "a" => Dict("b" => Dict("c" => Dict())),
@@ -657,7 +687,8 @@ str = """
 
 [x] # defining a super-table afterward is ok
 """
-d =  parsestring(str)
+@test_broken roundtrip(str) # Printer removes empty tables right now
+d = parsestring(str)
 @test d == Dict("x" => Dict("y" => Dict("z" => Dict("w" => Dict()))))
 
 
@@ -671,7 +702,8 @@ a = 3
 [x] # defining a super-table afterward is ok
 b = 2
 """
-d =  parsestring(str)
+@test roundtrip(str)
+d = parsestring(str)
 @test d == Dict(
   "x" => Dict(
       "b" => 2,
@@ -713,6 +745,7 @@ str = """
 [animal]
 [fruit.orange]
 """
+@test_broken roundtrip(str) # Printer removes empty tables right now
 d = parsestring(str)
 @test d == Dict(
   "fruit" => Dict("apple" => Dict(), "orange" => Dict()),
@@ -725,6 +758,7 @@ str = """
 [fruit.orange]
 [animal]
 """
+@test_broken roundtrip(str) # Printer removes empty tables right now
 @test d == Dict(
   "fruit" => Dict("apple" => Dict(), "orange" => Dict()),
   "animal" => Dict()
@@ -741,28 +775,13 @@ apple.taste.sweet = true
 [fruit.apple.texture]  # you can add sub-tables
 smooth = true
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d == Dict(
 "fruit" => Dict("apple" => Dict("color" => "red",
                                 "taste" => Dict("sweet" => true),
                                 "texture" => Dict("smooth" => true)))
 )
-
-str = """
-[fruit]
-apple.color = "red"
-apple.taste.sweet = true
-
-[fruit.apple]  # INVALID
-"""
-
-str = """
-[fruit]
-apple.color = "red"
-apple.taste.sweet = true
-
-[fruit.apple.taste]  # INVALID
-"""
 
 end # testset
 
@@ -787,7 +806,8 @@ y = 2
 [animal]
 type.name = "pug"
 """
-
+@test roundtrip(str)
+@test roundtrip(str2)
 @test parsestring(str) == parsestring(str2)
 
 str = """
@@ -823,6 +843,7 @@ sku = 284758393
 
 color = "gray"
 """
+@test roundtrip(str)
 @test parsestring(str) == Dict(
   "products" => [
     Dict("name" => "Hammer",
@@ -854,6 +875,7 @@ str = """
   [[fruit.variety]]
     name = "plantain"
 """
+@test roundtrip(str)
 d = parsestring(str)
 @test d == Dict(
   "fruit" => [
@@ -932,6 +954,7 @@ points = [ { x = 1, y = 2, z = 3 },
            { x = 7, y = 8, z = 9 },
            { x = 2, y = 4, z = 8 } ]
 """
+@test roundtrip(str)
 d = tryparsestring(str)
 @test d == Dict(
   "points" => [

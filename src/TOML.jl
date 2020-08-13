@@ -1,11 +1,15 @@
 module TOML
 
-using Dates
 
 module Internals
     include("parser.jl")
-    include("print.jl")
-end # module
+    # We put the printing functionality in a separate module since It
+    # defines a function `print` and we don't want that to collide with normal
+    # usage of `(Base.)print` in other files
+    module Printer
+        include("print.jl")
+    end
+end
 
 """
     Parser()
@@ -90,5 +94,13 @@ fields:
 - `type`, an error type, different for different type of errors
 """
 const ParserError = Internals.ParserError
+
+
+"""
+    print
+
+
+"""
+const print = Internals.Printer.print
 
 end

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Dates
+
 "Identify if character in subset of bare key symbols"
 isbare(c::AbstractChar) = 'A' <= c <= 'Z' || 'a' <= c <= 'z' || isdigit(c) || c == '-' || c == '_'
 
@@ -32,16 +34,21 @@ function printvalue(io::IO, value::AbstractArray; sorted=false)
 end
 printvalue(io::IO, value::AbstractDict; sorted=false) =
     _print(io, value, sorted=sorted)
-printvalue(io::IO, value::DateTime; sorted=false) =
-    Base.print(io, Dates.format(value, dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
+printvalue(io::IO, value::Dates.DateTime; sorted=false) =
+    Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
+printvalue(io::IO, value::Dates.Time; sorted=false) =
+    Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss"))
+printvalue(io::IO, value::Dates.Date; sorted=false) =
+    Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd"))
 printvalue(io::IO, value::Bool; sorted=false) =
     Base.print(io, value ? "true" : "false")
 printvalue(io::IO, value::Integer; sorted=false) =
     Base.print(io, Int(value))  # TOML specifies 64-bit signed long range for integer
 printvalue(io::IO, value::AbstractFloat; sorted=false) =
-    Base.print(io, Float64(value))  # TOML specifies IEEE 754 binary64 for float
-printvalue(io::IO, value; sorted=false) =
-    Base.print(io, "\"$(escape_string(string(value)))\"")
+    Base.print(io, isnan(value) ? "nan" : 
+                   isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
+                   Float64(value))  # TOML specifies IEEE 754 binary64 for float
+printvalue(io::IO, value::String; sorted=false) = Base.print(io, "\"", escape_string(value), "\"")
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&
@@ -53,7 +60,7 @@ function _print(io::IO, a::AbstractDict,
     indent::Int = 0,
     first_block::Bool = true,
     sorted::Bool = false,
-    by = identity,
+    by=identity,
 )
     akeys = keys(a)
     if sorted
