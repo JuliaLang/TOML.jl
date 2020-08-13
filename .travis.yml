@@ -7,15 +7,21 @@ os:
 julia:
   - 1.5
   - nightly
-env:
-  - ARCH="i686"
-  - ARCH="x86_64"
-matrix:
+arch:
+  - amd64
+  - x86
+jobs:
+  fast_finish: true
   exclude:
     - os: osx
-      env: ARCH="i686"
-notifications:
-  email: false
+      arch: x86
+  include:
+    - stage: "Documentation"
+      julia: 1.3
+      os: linux
+      script:
+        - julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("make.jl")'
+      after_success: skip
 
 after_success:
   - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
