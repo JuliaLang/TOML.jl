@@ -1,899 +1,1137 @@
-import Base: get
+using Base: IdSet
 
-"TOML Table"
-struct Table
-    values::Dict{String,Any}
-    defined::Bool
+# In case we do not have the Dates stdlib available
+# we parse DateTime into these internal structs,
+# note that these do not do any argument checking
+struct Date
+    year::Int
+    month::Int
+    day::Int
+end
+struct Time
+    hour::Int
+    minute::Int
+    second::Int
+    ms::Int
+end
+struct DateTime
+    date::Date
+    time::Time
+end
+DateTime(y, m, d, h, mi, s, ms) =
+    DateTime(Date(y,m,d), Time(h, mi, s, ms))
+
+const EOF_CHAR = typemax(Char)
+
+const TOMLDict  = Dict{String, Any}
+const TOMLArray = Vector{Any}
+
+
+##########
+# Parser #
+##########
+
+mutable struct Parser
+    str::String
+    # 1 character look ahead
+    current_char::Char
+    pos::Int
+    # prevpos equals the startbyte of the look ahead character
+    # prevpos-1 is therefore the end byte of the character we last ate
+    prevpos::Int
+
+    # File info
+    column::Int
+    line::Int
+
+    # The function `take_substring` takes the substring from `marker` up
+    # to `prevpos-1`.
+    marker::Int
+
+    # The current table that `key = value` entries are inserted into
+    active_table::TOMLDict
+
+    # As we parse dotted keys we store each part of the key in this cache
+    # A future improvement would be to also store the spans of the keys
+    # so that in error messages we could also show the previous key
+    # definition in case of duplicated keys
+    dotted_keys::Vector{String}
+
+    # Strings in TOML can have line continuations ('\' as the last character
+    # on a line. We store the byte ranges for each of these "chunks" in here
+    chunks::Vector{UnitRange{Int}}
+
+    # We need to keep track of those tables / arrays that are defined
+    # inline since we are not allowed to add keys to those
+    inline_tables::IdSet{TOMLDict}
+    static_arrays::IdSet{TOMLArray}
+
+    # [a.b.c.d] doesn't "define" the table [a]
+    # so keys can later be added to [a], therefore
+    # we need to keep track of what tables are
+    # actually defined
+    defined_tables::IdSet{TOMLDict}
+
+    # The table we will finally return to the user
+    root::TOMLDict
+
+    # Filled in in case we are parsing a file to improve error messages
+    filepath::Union{String, Nothing}
+
+    # Get's populated with the Dates stdlib if it exists
+    Dates::Union{Module, Nothing}
 end
 
-Table(defined::Bool) = Table(Dict{String,Any}(), defined)
-function Base.show(io::IO, tbl::Table, level::Int=1)
-    Base.print(io, "T($(tbl.defined)){\n")
-    for (k,v) in tbl.values
-        Base.print(io, "\t"^level, k, " => ")
-        if isa(v, Table)
-            Base.show(io, v, level+1)
-            Base.print(io, "\n")
-        elseif isa(v, Vector{Table})
-            Base.print(io, "[\n")
-            for i in 1:length(v)
-                Base.print(io, "\t"^level, "  ")
-                Base.show(io, v[i], level+1)
-                i != length(v) && Base.print(io, ",\n")
-            end
-            Base.print("\t"^level, "]\n")
-        else
-            Base.print(io, " $v\n")
-        end
+const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
+function Parser(str::String; filepath=nothing)
+    root = TOMLDict()
+    l = Parser(
+            str,                  # str
+            EOF_CHAR,             # current_char
+            firstindex(str),      # pos
+            0,                    # prevpos
+            0,                    # column
+            1,                    # line
+            0,                    # marker
+            root,                 # active_table
+            String[],             # dotted_keys
+            UnitRange{Int}[],     # chunks
+            IdSet{TOMLDict}(),    # inline_tables
+            IdSet{TOMLArray}(),   # static_arrays
+            IdSet{TOMLDict}(),    # defined_tables
+            root,
+            filepath,
+            get(Base.loaded_modules, DATES_PKGID, nothing),
+        )
+    startup(l)
+    return l
+end
+function startup(l::Parser)
+    # Populate our one character look-ahead
+    c = eat_char(l)
+    # Skip BOM
+    if c === '\ufeff'
+        l.column -= 1
+        eat_char(l)
     end
-    Base.print(io, "\t"^(level-1), "}\n")
-end
-Base.getindex(tbl::Table, key::AbstractString) = tbl.values[key]
-Base.haskey(tbl::Table, key::AbstractString) = haskey(tbl.values ,key)
-
-"Parser error exception"
-struct ParserError <: Exception
-    lo::Integer
-    hi::Integer
-    msg::String
 end
 
-"TOML Parser"
-mutable struct Parser{IO_T<:IO}
-    input::IO_T
-    errors::Vector{ParserError}
-    charbuffer::Base.GenericIOBuffer{Array{UInt8,1}}
-    currentchar::Char
+Parser() = Parser("")
+Parser(io::IO) = Parser(read(io, String))
 
-    Parser(input::IO_T) where {IO_T <: IO}  = new{IO_T}(input, ParserError[], IOBuffer(), ' ')
-end
-Parser(input::String) = Parser(IOBuffer(input))
-error(p::Parser, l, h, msg) = push!(p.errors, ParserError(l, h, msg))
-Base.eof(p::Parser) = eof(p.input)
-Base.position(p::Parser) = position(p.input)+1
-Base.write(p::Parser, x) = write(p.charbuffer, x)
-Base.read(p::Parser) = p.currentchar = read(p.input, Char)
-
-NONE() = nothing
-NONE(::Type{T}) where {T} = nothing
-SOME(v::T) where {T} = v
-NONE(::Type{String}, p::Parser) = (take!(p.charbuffer); nothing)
-SOME(::Type{String}, p::Parser) = String(take!(p.charbuffer))
-isnull(x) = x === nothing
-get(x) = (@assert !isnull(x); x)
-get(x, v) = !isnull(x) ? x : v
-
-"Rewind parser input on `n` characters."
-function rewind(p::Parser, n=1)
-    pos = position(p.input)
-    pos == 0 && return 0
-    skip(p.input, -n)
-    return position(p.input)
+function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+    p.str = str
+    p.current_char = EOF_CHAR
+    p.pos = firstindex(str)
+    p.prevpos = 0
+    p.column = 0
+    p.line = 1
+    p.marker = 0
+    p.root = TOMLDict()
+    p.active_table = p.root
+    empty!(p.dotted_keys)
+    empty!(p.chunks)
+    empty!(p.inline_tables)
+    empty!(p.static_arrays)
+    empty!(p.defined_tables)
+    p.filepath = filepath
+    startup(p)
+    return p
 end
 
-"Converts an offset to a line and a column in the original source."
-function linecol(p::Parser, offset::Integer)
-    pos = position(p)
-    seekstart(p.input)
-    line = 0
-    cur = 1
-    for (i,l) in enumerate(eachline(p.input, keep=true))
-        if cur + length(l) > offset
-            return (i, offset - cur + 1)
-        end
-        cur += length(l)
-        line+=1
-    end
-    seek(p.input, pos)
-    return (line, 0)
-end
+##########
+# Errors #
+##########
 
-"Determine next position in parser input"
-function nextpos(p::Parser)
-    pos = position(p)
-    return pos + 1
-end
+throw_internal_error(msg) = error("internal TOML parser error: $msg")
 
-"Peeks ahead `n` characters"
-function peek(p::Parser)
-    eof(p) && return nothing
-    res = Base.peek(p.input)
-    res == -1 && return nothing
-    return Char(res)
-end
-
-"Returns `true` and consumes the next character if it matches `ch`, otherwise do nothing and return `false`"
-function consume(p::Parser, ch::AbstractChar...)
-    eof(p) && return false
-    c = peek(p)
-    if get(c) in ch
-        read(p)
-        return true
-    else
-        return false
+# Many functions return a ParserError. We want this to bubble up
+# all the way and have this error be returned to the user
+# if the parse is called with `raise=false`. This macro
+# makes that easier
+@eval macro $(:var"try")(expr)
+    return quote
+        v = $(esc(expr))
+        v isa ParserError && return v
+        v
     end
 end
 
-function expect(p::Parser, ch::AbstractChar)
-    consume(p, ch) && return true
-    lo = position(p)
-    if eof(p)
-        error(p, lo, lo, "expected `$ch`, but found EOF")
-    else
-        v = peek(p)
-        mark(p.input)
-        c = read(p)
-        error(p, lo, lo+1, "expected `$ch`, but found `$c`")
-        reset(p.input)
-    end
-    return false
+# TODO: Check all of these are used
+@enum ErrorType begin
+
+    # Toplevel #
+    ############
+    ErrRedefineTableArray
+    ErrExpectedNewLineKeyValue
+    ErrAddKeyToInlineTable
+    ErrAddArrayToStaticArray
+    ErrArrayTreatedAsDictionary
+    ErrExpectedEndOfTable
+    ErrExpectedEndArrayOfTable
+
+    # Keys #
+    ########
+    ErrExpectedEqualAfterKey
+    # Check, are these the same?
+    ErrDuplicatedKey
+    ErrKeyAlreadyHasValue
+    ErrInvalidBareKeyCharacter
+    ErrEmptyBareKey
+
+    # Values #
+    ##########
+    ErrUnexpectedEofExpectedValue
+    ErrUnexpectedStartOfValue
+    ErrGenericValueError
+
+    # Arrays
+    ErrExpectedCommaBetweenItemsArray
+
+    # Inline tables
+    ErrExpectedCommaBetweenItemsInlineTable
+    ErrTrailingCommaInlineTable
+
+    # Numbers
+    ErrUnderscoreNotSurroundedByDigits
+    ErrLeadingZeroNotAllowedInteger
+    ErrOverflowError
+    ErrLeadingDot
+    ErrNoTrailingDigitAfterDot
+    ErrTrailingUnderscoreNumber
+
+    # DateTime
+    ErrParsingDateTime
+    ErrOffsetDateNotSupported
+
+    # Strings
+    ErrNewLineInString
+    ErrUnexpectedEndString
+    ErrInvalidEscapeCharacter
+    ErrInvalidUnicodeScalar
 end
 
-"Consumes whitespace ('\t' and ' ') until another character (or EOF) is reached. Returns `true` if any whitespace was consumed"
-function whitespace(p::Parser)
-    ret = false
-    while !eof(p)
-        c = read(p)
-        if c == '\t' || c == ' '
-            ret = true
-        else
-            rewind(p)
-            break
-        end
-    end
-    return ret
+const err_message = Dict(
+    ErrTrailingCommaInlineTable             => "trailing comma not allowed in inline table",
+    ErrExpectedCommaBetweenItemsArray       => "expected comma between items in array",
+    ErrExpectedCommaBetweenItemsInlineTable => "expected comma between items in inline table",
+    ErrExpectedEndArrayOfTable              => "expected array of table to end with ']]'",
+    ErrInvalidBareKeyCharacter              => "invalid bare key character",
+    ErrRedefineTableArray                   => "tried to redefine an existing table as an array",
+    ErrDuplicatedKey                        => "key already defined",
+    ErrKeyAlreadyHasValue                   => "key already has a value",
+    ErrEmptyBareKey                         => "bare key cannot be empty",
+    ErrExpectedNewLineKeyValue              => "expected newline after key value pair",
+    ErrNewLineInString                      => "newline character in single quoted string",
+    ErrUnexpectedEndString                  => "string literal ened unexpectedly",
+    ErrExpectedEndOfTable                   => "expected end of table ']'",
+    ErrAddKeyToInlineTable                  => "tried to add a new key to an inline table",
+    ErrArrayTreatedAsDictionary             => "tried to add a key to an array",
+    ErrAddArrayToStaticArray                => "tried to append to a statically defined array",
+    ErrGenericValueError                    => "failed to parse value",
+    ErrLeadingZeroNotAllowedInteger         => "leading zero in integer not allowed",
+    ErrUnderscoreNotSurroundedByDigits      => "underscore is not surrounded by digits",
+    ErrUnexpectedStartOfValue               => "unexpected start of value",
+    ErrOffsetDateNotSupported               => "offset date-time is not supported",
+    ErrParsingDateTime                      => "parsing date/time value failed",
+    ErrTrailingUnderscoreNumber             => "trailing underscore in number",
+    ErrLeadingDot                           => "floats require a leading zero",
+    ErrExpectedEqualAfterKey                => "expected equal sign after key",
+    ErrNoTrailingDigitAfterDot              => "expected digit after dot",
+    ErrOverflowError                        => "overflowed when parsing integer",
+    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidEscapeCharacter               => "invalid escape character",
+    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
+)
+
+for err in instances(ErrorType)
+    @assert haskey(err_message, err) "$err does not have an error message"
 end
 
-"Consumes the rest of the line after a comment character"
-function comment(p::Parser)
-    !consume(p, '#') && return false
-    while !eof(p)
-        ch = read(p)
-        ch == '\n' && break
+mutable struct ParserError <: Exception
+    type::ErrorType
+
+    # Arbitrary data to store at the
+    # call site to be used when formatting
+    # the error
+    data
+
+    # These are filled in before returning from parse function
+    str       ::Union{String,   Nothing}
+    filepath  ::Union{String,   Nothing}
+    line      ::Union{Int,      Nothing}
+    column    ::Union{Int,      Nothing}
+    pos       ::Union{Int,      Nothing} # position of parser when
+    table     ::Union{TOMLDict, Nothing} # result parsed until error
+end
+ParserError(type, data) = ParserError(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
+ParserError(type) = ParserError(type, nothing)
+# Defining these below can be useful when debugging code that erroneously returns a
+# ParserError because you get a stacktrace to where the ParserError was created
+#ParserError(type) = error(type)
+#ParserError(type, data) = error(type,data)
+
+# Many functions return either a T or a ParserError
+const Err{T} = Union{T, ParserError}
+
+function format_error_message_for_err_type(error::ParserError)
+    msg = err_message[error.type]
+    if error.type == ErrInvalidBareKeyCharacter
+        c_escaped = escape_string(string(error.data))
+        msg *= ": '$c_escaped'"
     end
-    return true
+    return msg
 end
 
-"Consumes a newline if one is next"
-function newline(p::Parser)
-    if !eof(p)
-        n = 1
-        ch = read(p.input, UInt8)
-        ch == 0x0a && return true
-        if ch == 0x0d
-            if !eof(p)
-                nch = read(p.input, UInt8)
-                nch == 0x0a  && return true
-                n+=1
-            end
-        end
-        rewind(p, n)
-    end
-    return false
-end
-
-"Consume ignored symbols"
-function ignore(p::Parser)
+# This is used in error formatting, for example,
+# point_to_line("aa\nfoobar\n\bb", 4, 6) would return the strings:
+# str1 = "foobar"
+# str2 = "^^^"
+# used to show the interval where an error happened
+# Right now, it is only called with a == b
+function point_to_line(str::AbstractString, a::Int, b::Int, context)
+    @assert b >= a
+    a = thisind(str, a)
+    b = thisind(str, b)
+    pos = something(findprev('\n', str, prevind(str, a)), 0) + 1
+    io1 = IOContext(IOBuffer(), context)
+    io2 = IOContext(IOBuffer(), context)
     while true
-        whitespace(p)
-        !newline(p) && !comment(p) && break
-    end
-end
-
-"Parse a single key name starting at next position"
-function keyname(p)
-    s = nextpos(p)
-    key = if consume(p, '"')
-        basicstring(p, s, false)
-    elseif consume(p, '\'')
-        literalstring(p, s, false)
-    else
-        while !eof(p)
-            ch = read(p)
-            if  'a' <= ch <= 'z' ||
-                'A' <= ch <= 'Z' ||
-                isdigit(ch)      ||
-                ch == '_'        ||
-                ch == '-'
-                write(p, ch)
-            else
-                rewind(p)
-                break
-            end
-        end
-        SOME(String, p)
-    end
-
-    if !isnull(key) && isempty(get(key))
-        error(p, s, s, "expected a key but found an empty string")
-        key = NONE(String, p)
-    end
-    return key
-end
-
-"Parse a path into a vector of paths"
-function lookup(p::Parser)
-    ks = String[]
-    eof(p) && return SOME(ks)
-    while true
-        whitespace(p)
-        s = keyname(p)
-        if !isnull(s)
-            push!(ks, get(s))
+        if a <= pos <= b
+            printstyled(io2, "^"; color=:light_green)
         else
-            s = integer(p, 0)
-            if !isnull(s)
-                push!(ks, get(s))
-            else
-                return NONE()
-            end
+            print(io2, " ")
         end
-        whitespace(p)
-        !expect(p, '.') && return SOME(ks)
+        it = iterate(str, pos)
+        it === nothing && break
+        c, pos = it
+        c == '\n' && break
+        print(io1, c)
     end
+    return String(take!(io1.io)), String(take!(io2.io))
 end
 
-"Parses a key-value separator"
-function separator(p::Parser)
-    whitespace(p)
-    !expect(p, '=') && return false
-    whitespace(p)
-    return true
+function Base.showerror(io::IO, err::ParserError)
+    printstyled(io, "TOML Parser error:\n"; color=Base.error_color())
+    f = something(err.filepath, "none")
+    printstyled(io, f, ':', err.line, ':', err.column; bold=true)
+    printstyled(io, " error: "; color=Base.error_color())
+    println(io, format_error_message_for_err_type(err))
+    # In this case we want the arrow to point one character
+    pos = err.pos
+    err.type == ErrUnexpectedEofExpectedValue && (pos += 1)
+    str1, err1 = point_to_line(err.str, pos, pos, io)
+    # See https://github.com/JuliaLang/julia/issues/36015
+    format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+    println(io, "$format_fixer  ", str1)
+    print(io, "$format_fixer  ", err1)
 end
 
-"Insert key-value pair to table, if duplicate key found reports error"
-function insertpair(p::Parser, tbl::Table, k, v, st)
-    if haskey(tbl, k)
-        error(p, st, st+length(k), "duplicate key `$k`")
-    else
-        tbl.values[k] = v
+
+################
+# Parser utils #
+################
+
+@inline function next_char(l::Parser)::Char
+    state = iterate(l.str, l.pos)
+    l.prevpos = l.pos
+    l.column += 1
+    state === nothing && return EOF_CHAR
+    c, pos = state
+    l.pos = pos
+    if c == '\n'
+        l.line += 1
+        l.column = 0
     end
+    return c
 end
 
-"Parses integer with leading zeros and sign"
-function integer(p::Parser, st::Integer, allow_leading_zeros::Bool=false, allow_sign::Bool=false)
-    if allow_sign
-        if consume(p, '-')
-            write(p, '-')
-        elseif consume(p, '+')
-            write(p, '+')
-        end
-    end
-    nch = peek(p)
-    if isnull(nch)
-        pos = nextpos(p)
-        error(p, pos, pos, "expected start of a numeric literal")
-        return NONE(String, p)
-    else
-        ch = get(nch)
-        if isdigit(ch)
-            c = read(p)
-            if c == '0' && !allow_leading_zeros
-                write(p, '0')
-                nch = peek(p)
-                if !isnull(nch)
-                    ch = get(nch)
-                    if isdigit(ch)
-                        error(p, st, position(p), "leading zeroes are not allowed")
-                        return NONE(String, p)
-                    end
-                end
-            elseif isdigit(c)
-                write(p, c)
-            end
-        else
-            # non-digit
-            error(p, st, position(p), "expected a digit, found `$ch`")
-            return NONE(String, p)
-        end
-    end
-
-    underscore = false
-    while !eof(p)
-        ch = read(p)
-        if isdigit(ch)
-            write(p, ch)
-            underscore = false
-        elseif ch == '_' && !underscore
-            underscore = true
-        else
-            rewind(p)
-            break
-        end
-    end
-    if underscore
-        pos = nextpos(p)
-        error(p, pos, pos, "numeral cannot end with an underscore")
-        NONE(String, p)
-    else
-        p.charbuffer.ptr == 1 ? NONE(String, p) : SOME(String, p)
-    end
+@inline function eat_char(l::Parser)::Char
+    c = l.current_char
+    l.current_char = next_char(l)
+    return c
 end
 
-"Parses boolean"
-function boolean(p::Parser, st::Integer)
-    ch = '\x00'
+@inline peek(l::Parser) = l.current_char
 
-    i = 0
-    word = "true"
-    while !eof(p) && i<length(word)
-        ch = read(p)
-        i+=1
-        ch != word[i] && break
+# Return true if the character was accepted. When a character
+# is accepted it get's eaten and we move to the next character
+@inline function accept(l::Parser, f::Union{Function, Char})::Bool
+    c = peek(l)
+    c == EOF_CHAR && return false
+    ok = false
+    if isa(f, Function)
+        ok = f(c)
+    elseif isa(f, Char)
+        ok = c === f
     end
-    if i == length(word)
-        return SOME(true)
-    else
-        rewind(p, i)
-    end
-    ti = i
-    tch = ch
-
-    i = 0
-    word = "false"
-    while !eof(p) && i<length(word)
-        ch = read(p)
-        i+=1
-        ch != word[i] && break
-    end
-    if i == length(word)
-        return SOME(false)
-    else
-        rewind(p, i)
-        if i < ti
-            i = ti
-            ch = tch
-        end
-        error(p, st, st+i-1, "unexpected character: `$ch`")
-    end
-
-    return NONE(Bool)
+    ok && eat_char(l)
+    return ok
 end
 
-"Parse number or datetime"
-function numdatetime(p::Parser, st::Integer)
-    isfloat = false
-
-    nprefix = integer(p, st, false, true)
-    isnull(nprefix) && return NONE()
-    prefix = get(nprefix)
-
-    decimal = if consume(p, '.')
-        isfloat = true
-        ndecimal = integer(p, st, true, false)
-        isnull(ndecimal) && return NONE()
-        SOME(get(ndecimal))
-    else
-        NONE(String, p)
+# Return true if any character was accepted
+function accept_batch(l::Parser, f::F)::Bool where {F}
+    ok = false
+    while accept(l, f)
+        ok = true
     end
-
-    exponent = if consume(p,'e') || consume(p,'E')
-        isfloat = true;
-        nexponent = integer(p, st, false, true)
-        isnull(nexponent) && return NONE()
-        SOME(get(nexponent))
-    else
-        NONE(String, p)
-    end
-
-    pend = nextpos(p)
-    nch = peek(p)
-    ret = if isnull(decimal) &&
-             isnull(exponent) &&
-             nch != '+' &&
-             nch != '+' &&
-             st + 4 == pend &&
-             consume(p, '-')
-        datetime(p, prefix, st)
-    else
-        input = if isnull(decimal) && isnull(exponent) #!isfloat
-            prefix
-        elseif !isnull(decimal) && isnull(exponent)
-            "$(prefix)."*get(decimal,"")
-        elseif isnull(decimal) && !isnull(exponent)
-            "$(prefix)E"*get(exponent,"")
-        elseif !isnull(decimal) && !isnull(exponent)
-            "$(prefix)."*get(decimal,"")*"E"*get(exponent,"")
-        end
-        input = lstrip(input, '+')
-        try
-            SOME(Base.parse(isfloat ? Float64 : Int, input))
-        catch
-            NONE()
-        end
-    end
-    isnull(ret) && error(p, st, pend, "invalid numeric literal")
-    return ret
+    return ok
 end
 
-"Parses a datetime value"
-function datetime(p::Parser, syear::String, st::Integer)
-
-    valid = true
-
-    function parsetwodigits(p, valid)
-        eof(p) && return 0, false
-        ch1 = read(p)
-        valid = valid && isdigit(ch1)
-        eof(p) && return 0, false
-        ch2 = read(p)
-        valid = valid && isdigit(ch2)
-        (valid ? Base.parse(Int, String([ch1, ch2])) : 0), valid
-    end
-
-    year = Base.parse(Int, syear)
-    month,  valid = parsetwodigits(p, valid)
-    valid = valid && consume(p, '-')
-    day,    valid = parsetwodigits(p, valid)
-    valid = valid && consume(p, 't', 'T', ' ')
-    hour,   valid = parsetwodigits(p, valid)
-    valid = valid && consume(p, ':')
-    minute, valid = parsetwodigits(p, valid)
-    valid = valid && consume(p, ':')
-    second, valid = parsetwodigits(p, valid)
-
-    # fractional seconds
-    msec = 0
-    if consume(p, '.')
-        fsec = Char[]
-        ch = peek(p)
-        valid = valid && !isnull(ch) && isdigit(get(ch))
-        while true
-            ch = peek(p)
-            if !isnull(ch) && isdigit(get(ch))
-                push!(fsec, read(p))
-            else
-                break
-            end
-        end
-        if length(fsec)>0
-            msec = Base.parse(Int, String(fsec))
-            if msec > 1000 # truncate msecs
-                msec = round(Int,msec/(10^(ndigits(msec)-3)))
-            end
-        end
-    end
-
-    # time zone
-    tzhour=0
-    tzminute=0
-    tzplus = true
-    tzminus = false
-    tzsign = true
-    if valid && !consume(p, 'Z', 'z')
-        tzplus = consume(p, '+')
-        if !tzplus
-            tzminus = consume(p, '-')
-        end
-        valid = valid && (tzplus || tzminus)
-        tzhour,   valid = parsetwodigits(p, valid)
-        valid =   valid && consume(p, ':')
-        tzminute, valid = parsetwodigits(p, valid)
-
-        tzsign = tzplus
-    end
-
-    if valid
-        dt = Dates.DateTime(year, month, day,
-                hour + (tzsign ? tzhour : -tzhour),
-                minute + (tzsign ? tzminute : -tzminute),
-                second, msec)
-        return SOME(dt)
-    else
-        error(p, st, position(p), "malformed date literal")
-        return NONE()
-    end
-end
-
-"Parses a single or multi-line string"
-function basicstring(p::Parser, st::Integer)
-    !expect(p, '"') && return NONE(String, p)
-
-    multiline = false
-
-    if consume(p, '"')
-        if consume(p, '"')
-            multiline = true
-            newline(p)
-        else
-            return SOME("")
-        end
-    end
-
-    basicstring(p, st, multiline)
-end
-
-"Finish parsing a basic string after the opening quote has been seen"
-function basicstring(p::Parser, st::Integer, multiline::Bool)
-    while true
-        while multiline && newline(p)
-            write(p, '\n')
-        end
-        if eof(p)
-            pos = position(p)
-            error(p, st, pos, "unterminated string literal")
-            return NONE(String, p)
-        else
-            ch = read(p)
-            if ch == '"'
-                if multiline
-                    if !consume(p, '"')
-                        write(p, '"')
-                        continue
-                    end
-                    if !consume(p, '"')
-                        write(p, '"')
-                        write(p, '"')
-                        continue
-                    end
-                end
-                return SOME(String, p)
-            elseif ch == '\\'
-                pos = position(p)
-                ec = escape(p, pos, multiline)
-                !isnull(ec) && write(p, get(ec))
-            elseif ch < '\x1f'
-                pos = position(p)
-                error(p, st, pos, "control character `$ch` must be escaped")
-            else
-                write(p, ch)
-            end
-        end
-    end
-end
-
-"Reads character(s) after `\\` and transforms them into proper character"
-function escape(p::Parser, st::Integer, multiline::Bool)
-    if multiline && newline(p)
-        while whitespace(p) || newline(p) end
-        return NONE()
-    end
-    pos = position(p)
-    if eof(p)
-        error(p, st, pos, "unterminated escape sequence")
-        return NONE()
-    else
-        ch = read(p)
-        if ch == 'b'
-            SOME('\b')
-        elseif ch == 't'
-            SOME('\t')
-        elseif ch == 'n'
-            SOME('\n')
-        elseif ch == 'f'
-            SOME('\f')
-        elseif ch == 'r'
-            SOME('\r')
-        elseif ch == '"'
-            SOME('\"')
-        elseif ch == '\\'
-            SOME('\\')
-        elseif ch == 'u' || ch == 'U'
-            len = ch == 'u' ? 4 : 8
-            ucstr = ch == 'u' ? "\\u" : "\\U"
-            snum = String(read(p.input, len))
-            try
-                if length(snum) < len
-                    error(p, st, st+len, "expected $len hex digits after a `$ch` escape")
-                    NONE()
-                end
-                if !all(isxdigit, snum)
-                    error(p, st, st+len, "unknown string escape: `$snum`")
-                    NONE()
-                end
-                c = unescape_string(ucstr * snum)[1]
-                SOME(c)
-            catch
-                error(p, st, st+len, "codepoint `$snum` is not a valid unicode codepoint")
-                rewind(p, len)
-                NONE()
-            end
-        else
-            error(p, st, position(p), "unknown string escape: `\\x$(UInt8(ch))`")
-            NONE()
-        end
-    end
-end
-
-"Parses a single or multi-line literal string"
-function literalstring(p::Parser, st::Integer)
-    !expect(p, '\'') && return NONE(String, p)
-
-    multiline = false
-
-    if consume(p, '\'')
-        if consume(p, '\'')
-            multiline = true
-            newline(p)
-        else
-            return SOME("")
-        end
-    end
-
-    literalstring(p, st, multiline)
-end
-
-function literalstring(p::Parser, st::Integer, multiline::Bool)
-    while true
-        if !multiline && newline(p)
-            npos = nextpos(p)
-            error(p, st, npos, "literal strings cannot contain newlines")
-            return NONE(String, p)
-        end
-        if eof(p)
-            error(p, st, position(p), "unterminated string literal")
-            return NONE(String, p)
-        else
-            ch = read(p.input, UInt8)
-            if ch == 0x27
-                if multiline
-                    if !consume(p, '\'')
-                        write(p, 0x27)
-                        continue
-                    end
-                    if !consume(p, '\'')
-                        write(p, 0x27)
-                        write(p, 0x27)
-                        continue
-                    end
-                end
-                return SOME(String, p)
-            else
-                write(p, ch)
-            end
-        end
-    end
-end
-
-function array(p::Parser, st::Integer)
-    !expect(p, '[') && return NONE()
-    ret = Any[]
-    rettype = Any
-    expected = Any
-    while true
-
-        # Break out early if we see the closing bracket
-        ignore(p)
-        consume(p, ']') && return SOME(ret)
-
-        # Attempt to parse a value, triggering an error if it's the wrong type.
-        pstart = nextpos(p)
-        npvalue = value(p)
-        isnull(npvalue) && return NONE()
-        pvalue = get(npvalue)
-
-        pend = nextpos(p)
-        valtype = isa(pvalue, Array) ? Array : typeof(pvalue)
-        expected = rettype === Any ? valtype : expected
-        if valtype != expected
-            error(p, pstart, pend, "expected type `$expected`, found type `$valtype`")
-        else
-            rettype = expected
-            push!(ret, pvalue)
-        end
-
-        # Look for a comma. If we don't find one we're done
-        ignore(p)
-        !consume(p, ',') && break
-    end
-    ignore(p)
-    !expect(p, ']') && return NONE()
-    return SOME(convert(Vector{rettype}, ret))
-end
-
-function inlinetable(p::Parser, st::Integer)
-    !expect(p, '{') && return NONE()
-    whitespace(p)
-
-    ret = Table(true)
-    consume(p, '}') && return SOME(ret)
-
-    while true
-        npos = nextpos(p)
-        k = keyname(p)
-        isnull(k) && return NONE()
-        !separator(p) && return NONE()
-        v = value(p)
-        isnull(v) && return NONE()
-        insertpair(p, ret, get(k), get(v), npos)
-
-        whitespace(p)
-        consume(p, '}') && break
-        !expect(p, ',') && return NONE()
-        whitespace(p)
-    end
-
-    return SOME(ret)
-end
-
-"Parses a value"
-function value(p::Parser)
-    whitespace(p)
-    c = peek(p)
-    isnull(c) && return NONE()
-    ch = get(c)
-    pos = position(p)+1
-    if ch == '"'
-        return basicstring(p, pos)
-    elseif ch == '\''
-        return literalstring(p, pos)
-    elseif ch == 't' || ch == 'f'
-        return boolean(p, pos)
-    elseif ch == '['
-        return array(p, pos)
-    elseif ch == '{'
-        return inlinetable(p, pos)
-    elseif ch == '-' || ch == '+' || isdigit(ch)
-        return numdatetime(p, pos)
-    else
-        error(p, pos, pos+1, "expected a value")
-        return NONE()
-    end
-end
-
-"Parses the key-values and fills the given dictionary. Returns true in case of success and false in case of error."
-function keyvalues(p::Parser, tbl::Table)
-    while true
-        whitespace(p)
-        newline(p) && continue
-        comment(p) && continue
-        nc = peek(p)
-        isnull(nc) && break
-        get(nc) == '[' && break
-
-        # get key
-        klo = nextpos(p)
-        k = keyname(p)
-        isnull(k) && return false
-
-        # skip kv separator
-        !separator(p) && return false
-
-        # get value
-        v = value(p)
-        isnull(v) && return false
-        vend = nextpos(p)
-
-        # insert kv into result table
-        insertpair(p, tbl, get(k), get(v), klo)
-
-        whitespace(p)
-        if !comment(p) && !newline(p)
-            pc = peek(p)
-            isnull(pc) && return true
-            error(p, klo, vend, "expected a newline after a key")
+# Return true if `f` was accepted `n` times
+@inline function accept_n(l::Parser, n, f::F)::Bool where {F}
+    for i in 1:n
+        if !accept(l, f)
             return false
         end
     end
     return true
 end
 
-"Construct nested structures from keys"
-function nested(p, into, ks, kstart)
-    cnode = into
-    kend = 0
-    for k in ks[1:end-1]
-        kend += length(k)+1
-        if !haskey(cnode, k)
-            cnode.values[k] = Table(false)
-            cnode = cnode[k]
-        else
-            tmp = cnode[k]
-            if isa(tmp, Table)
-                cnode = tmp
-            elseif isa(tmp, Array)
-                if length(tmp)>0 && typeof(tmp[end]) === Table
-                    cnode = tmp[end]
-                else
-                    error(p, kstart, kstart+kend, "array `$k` does not contain tables")
-                    return NONE(), kend
-                end
-            else
-                error(p, kstart, kstart+kend, "key `$k` was not previously a table")
-                return NONE(), kend
-            end
+@inline iswhitespace(c::Char) = c == ' ' || c == '\t'
+@inline isnewline(c::Char) = c == '\n' || c == '\r'
+
+skip_ws(l::Parser) = accept_batch(l, iswhitespace)
+
+skip_ws_nl_no_comment(l::Parser)::Bool = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
+
+function skip_ws_nl(l::Parser)::Bool
+    skipped = false
+    while true
+        skipped_ws = accept_batch(l, x -> iswhitespace(x) || isnewline(x))
+        skipped_comment = skip_comment(l)
+        if !skipped_ws && !skipped_comment
+            break
         end
+        skipped = true
     end
-    return SOME(cnode), kend
+    return skipped
 end
 
-function addtable(p::Parser, into::Table, ks::Vector{String}, tbl::Table, kstart)
+# Returns true if a comment was skipped
+function skip_comment(l::Parser)::Bool
+    found_comment = accept(l, '#')
+    if found_comment
+        accept_batch(l, !isnewline)
+    end
+    return found_comment
+end
 
-    cnode, kend = nested(p, into, ks, kstart)
-    isnull(cnode) && return
-    cur = get(cnode)
+skip_ws_comment(l::Parser) = skip_ws(l) && skip_comment(l)
 
-    # fill last level with values
-    tkey = ks[end]
-    if haskey(cur, tkey)
-        ctbl = cur[tkey]
-        if isa(ctbl, Table)
-            ctbl.defined && error(p, kstart, kstart+kend+length(tkey), "redefinition of table `$tkey`")
+@inline set_marker!(l::Parser) = l.marker = l.prevpos
+take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
 
-            for (k,v) in tbl.values
-                insertpair(p, ctbl, k, v, kstart)
-            end
-        else
-            error(p, kstart, kstart+kend+length(tkey), "key `$tkey` was not previously a table")
+############
+# Toplevel #
+############
+
+# Driver, keeps parsing toplevel until we either get
+# a `ParserError` or eof.
+function parse(l::Parser; raise=false)::Err{TOMLDict}
+    while true
+        skip_ws_nl(l)
+        peek(l) == EOF_CHAR && break
+        v = parse_toplevel(l)
+        if v isa ParserError
+            v.str      = l.str
+            v.pos      = l.prevpos-1
+            v.table    = l.root
+            v.filepath = l.filepath
+            v.line     = l.line
+            v.column   = l.column-1
+            raise ? throw(v) : return v
+        end
+    end
+    return l.root
+end
+
+# Top level can be either a table key, an array of table statement
+# or a key/value entry.
+function parse_toplevel(l::Parser)::Err{Nothing}
+    if accept(l, '[')
+        l.active_table = l.root
+        @try parse_table(l)
+        skip_ws_comment(l)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+            eat_char(l)
+            return ParserError(ErrExpectedNewLineKeyValue)
         end
     else
-        cur.values[tkey] = tbl
+        @try parse_entry(l, l.active_table)
+        skip_ws_comment(l)
+        # SPEC: "There must be a newline (or EOF) after a key/value pair."
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+            c = eat_char(l)
+            return ParserError(ErrExpectedNewLineKeyValue)
+        end
     end
-
 end
 
-function addarray(p::Parser, into::Table, ks::Vector{String}, val, kstart)
+function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+    for i in 1:length(dotted_keys)
+        key = dotted_keys[i]
+        d = get!(TOMLDict, d, key)
+        if d isa TOMLArray
+            d = d[end]
+        end
+        check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
+    end
+    return d
+end
 
-    cnode, kend = nested(p, into, ks, kstart)
-    isnull(cnode) && return
-    cur = get(cnode)
+function check_allowed_add_key(l::Parser, d, check_defined=true)::Err{Nothing}
+    if !(d isa Dict)
+        return ParserError(ErrKeyAlreadyHasValue)
+    elseif d isa Dict && d in l.inline_tables
+        return ParserError(ErrAddKeyToInlineTable)
+    elseif check_defined && d in l.defined_tables
+        return ParserError(ErrDuplicatedKey)
+    end
+    return nothing
+end
 
-    akey = ks[end]
-    if haskey(cur, akey)
-        vec = cur[akey]
-        if isa(vec, Array)
-            if isa(val, eltype(vec))
-                push!(vec, val)
-            else
-                error(p, kstart, kstart+kend+length(akey), "expected type `$(typeof(val))`, found type `$(eltype(vec))`")
-            end
-        else
-            error(p, kstart, kstart+kend+length(akey), "key `$akey` was previously not an array")
+# Can only enter here from toplevel
+function parse_table(l)
+    if accept(l, '[')
+        return parse_array_table(l)
+    end
+    table_key = @try parse_key(l)
+    skip_ws(l)
+    if !accept(l, ']')
+        return ParserError(ErrExpectedEndOfTable)
+    end
+    l.active_table = @try recurse_dict!(l, l.root, table_key)
+    push!(l.defined_tables, l.active_table)
+    return
+end
+
+function parse_array_table(l)::Union{Nothing, ParserError}
+    table_key = @try parse_key(l)
+    skip_ws(l)
+    if !(accept(l, ']') && accept(l, ']'))
+        return ParserError(ErrExpectedEndArrayOfTable)
+    end
+    d = @try recurse_dict!(l, l.root, @view(table_key[1:end-1]), false)
+    k = table_key[end]
+    old = get!(() -> [], d, k)
+    if old isa Vector
+        if old in l.static_arrays
+            return ParserError(ErrAddArrayToStaticArray)
         end
     else
-        cur.values[akey] = Any[val]
+        return ParserError(ErrArrayTreatedAsDictionary)
+    end
+    d_new = TOMLDict()
+    push!(old, d_new)
+    push!(l.defined_tables, d_new)
+    l.active_table = d_new
+
+    return
+end
+
+function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
+    key = @try parse_key(l)
+    skip_ws(l)
+    if !accept(l, '=')
+        return ParserError(ErrExpectedEqualAfterKey)
+    end
+    if length(key) > 1
+        d = @try recurse_dict!(l, d, @view(key[1:end-1]))
+    end
+    last_key_part = l.dotted_keys[end]
+
+    v = get(d, last_key_part, nothing)
+    if v !== nothing
+        @try check_allowed_add_key(l, v)
     end
 
+    skip_ws(l)
+    value = @try parse_value(l)
+    # TODO: Performance, hashing `last_key_part` again here
+    d[last_key_part] = value
+    return
 end
 
 
-"""Executes the parser, parsing the string contained within.
+########
+# Keys #
+########
 
-This function will return the `Table` instance if parsing is successful, or it will return `nothing` if any parse error or invalid TOML error occurs.
+# SPEC: "Bare keys may only contain ASCII letters, ASCII digits, underscores,
+# and dashes (A-Za-z0-9_-).
+# Note that bare keys are allowed to be composed of only ASCII digits, e.g. 1234,
+# but are always interpreted as strings."
+@inline isvalid_barekey_char(c::Char) =
+    'a' <= c <= 'z' ||
+    'A' <= c <= 'Z' ||
+    isdigit(c) ||
+    c == '-' || c == '_'
 
-If an error occurs, the `errors` field of this parser can be consulted to determine the cause of the parse failure.
-"""
-function parse(p::Parser)
-    ret = Table(false)
-    while !eof(p)
-        whitespace(p)
-        newline(p) && continue
-        comment(p) && continue
+# Current key...
+function parse_key(l::Parser)
+    empty!(l.dotted_keys)
+    _parse_key(l)
+end
 
-        # parse section
-        if consume(p, '[')
-            arr = consume(p, '[')
-            npos = nextpos(p)
-
-            # parse the name of the section
-            ks = String[]
-            while true
-                whitespace(p)
-                s = keyname(p)
-                !isnull(s) && push!(ks, get(s))
-                whitespace(p)
-                if consume(p, ']')
-                    arr && !expect(p, ']') && return NONE(Table)
-                    break
-                end
-                !expect(p, '.') && return NONE()
+# Recursively add dotted keys to `l.dotted_key`
+function _parse_key(l::Parser)
+    skip_ws(l)
+    # SPEC: "A bare key must be non-empty,"
+    if isempty(l.dotted_keys) && accept(l, '=')
+        return ParserError(ErrEmptyBareKey)
+    end
+    keyval = if accept(l, '"')
+        @try parse_string_start(l, false)
+    elseif accept(l, '\'')
+        @try parse_string_start(l, true)
+    else
+        set_marker!(l)
+        if accept_batch(l, isvalid_barekey_char)
+            if !(peek(l) == '.' || peek(l) == ' ' || peek(l) == ']' || peek(l) == '=')
+                c = eat_char(l)
+                return ParserError(ErrInvalidBareKeyCharacter, c)
             end
-            isempty(ks) && return NONE(Table)
+            String(take_substring(l))
+        else
+            c = eat_char(l)
+            return ParserError(ErrInvalidBareKeyCharacter, c)
+        end
+    end
+    new_key = keyval
+    push!(l.dotted_keys, new_key)
+    # SPEC: "Whitespace around dot-separated parts is ignored."
+    skip_ws(l)
+    if accept(l, '.')
+        skip_ws(l)
+        @try _parse_key(l)
+    end
+    return l.dotted_keys
+end
 
-            # build the section
-            section = Table(true)
-            !keyvalues(p, section) && return NONE(Table)
-            if arr
-                addarray(p, ret, ks, section, npos)
-            else
-                addtable(p, ret, ks, section, npos)
+
+##########
+# Values #
+##########
+
+function parse_value(l::Parser)
+    val = if accept(l, '[')
+        parse_array(l)
+    elseif accept(l, '{')
+        parse_inline_table(l)
+    elseif accept(l, '"')
+        parse_string_start(l, false)
+    elseif accept(l, '\'')
+        parse_string_start(l, true)
+    elseif accept(l, 't')
+        parse_bool(l, true)
+    elseif accept(l, 'f')
+        parse_bool(l, false)
+    else
+        parse_number_or_date_start(l)
+    end
+    if val === nothing
+        return ParserError(ErrGenericValueError)
+    end
+    return val
+end
+
+
+#########
+# Array #
+#########
+
+function parse_array(l::Parser)::Err{TOMLArray}
+    array = Any[]
+    push!(l.static_arrays, array)
+    skip_ws_nl(l)
+    accept(l, ']') && return array
+    while true
+        v = @try parse_value(l)
+        push!(array, v)
+        # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
+        skip_ws_nl(l)
+        comma = accept(l, ',')
+        skip_ws_nl(l)
+        accept(l, ']') && return array
+        if !comma
+            return ParserError(ErrExpectedCommaBetweenItemsArray)
+        end
+    end
+end
+
+
+################
+# Inline table #
+################
+
+function parse_inline_table(l::Parser)::Err{TOMLDict}
+    dict = TOMLDict()
+    push!(l.inline_tables, dict)
+    skip_ws(l)
+    accept(l, '}') && return dict
+    while true
+        @try parse_entry(l, dict)
+        # SPEC: No newlines are allowed between the curly braces unless they are valid within a value.
+        skip_ws(l)
+        accept(l, '}') && return dict
+        if accept(l, ',')
+            skip_ws(l)
+            if accept(l, '}')
+                return ParserError(ErrTrailingCommaInlineTable)
             end
         else
-            !keyvalues(p, ret) && return NONE(Table)
+            return ParserError(ErrExpectedCommaBetweenItemsInlineTable)
+        end
+    end
+end
+
+
+###########
+# Numbers #
+###########
+
+parse_inf(l::Parser, sgn::Int) = accept(l, 'n') && accept(l, 'f') ? sgn * Inf : nothing
+parse_nan(l::Parser) = accept(l, 'a') && accept(l, 'n') ? NaN : nothing
+
+function parse_bool(l::Parser, v::Bool)::Union{Bool, Nothing}
+    # Have eaten a 't' if `v` is true, otherwise have eaten a `f`.
+    v ? (accept(l, 'r') && accept(l, 'u') && accept(l, 'e') && return true) :
+        (accept(l, 'a') && accept(l, 'l') && accept(l, 's') && accept(l, 'e') && return false)
+    return nothing
+end
+
+isvalid_hex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
+isvalid_oct(c::Char) = '0' <= c <= '7'
+isvalid_binary(c::Char) = '0' <= c <= '1'
+
+const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
+# This function eats things accepted by `f` but also allows eating `_` in between
+# digits. Retruns if it ate at lest one character and if it ate an underscore
+function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}
+    contains_underscore = false
+    at_least_one = false
+    last_underscore = false
+    while true
+        c = peek(l)
+        if c == '_'
+            contains_underscore = true
+            if fail_if_underscore
+                return ParserError(ErrUnderscoreNotSurroundedByDigits)
+            end
+            eat_char(l)
+            fail_if_underscore = true
+            last_underscore = true
+        else
+            # SPEC:  "Each underscore must be surrounded by at least one digit on each side."
+            fail_if_underscore = false
+            if f(c)
+                at_least_one = true
+                eat_char(l)
+            else
+                if last_underscore
+                    return ParserError(ErrTrailingUnderscoreNumber)
+                end
+                return at_least_one, contains_underscore
+            end
+            last_underscore = false
+        end
+    end
+end
+
+function parse_number_or_date_start(l::Parser)
+    integer = true
+    read_dot = false
+
+    set_marker!(l)
+    sgn = 1
+    if accept(l, '+')
+        # do nothing
+    elseif accept(l, '-')
+        sgn = -1
+    end
+    if accept(l, 'i')
+        return parse_inf(l, sgn)
+    elseif accept(l, 'n')
+        return parse_nan(l)
+    end
+
+    if accept(l, '.')
+        return ParserError(ErrLeadingDot)
+    end
+
+    # Zero is allowed to follow by a end value char, a base x, o, b or a dot
+    readed_zero = false
+    if accept(l, '0')
+        readed_zero = true # Intentional bad grammar to remove the ambiguity in "read"...
+        if ok_end_value(peek(l))
+            return 0
+        elseif accept(l, 'x')
+            ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
+            ate && return parse_int(l, contains_underscore)
+        elseif accept(l, 'o')
+            ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
+            ate && return parse_int(l, contains_underscore)
+        elseif accept(l, 'b')
+            ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
+            ate && return parse_int(l, contains_underscore)
+        elseif accept(l, isdigit)
+            return parse_local_time(l)
+        elseif peek(l) !== '.'
+            return ParserError(ErrLeadingZeroNotAllowedInteger)
         end
     end
 
-    length(p.errors) != 0 && return NONE(Table)
+    read_underscore = false
+    read_digit = accept(l, isdigit)
+    if !readed_zero && !read_digit
+        if peek(l) == EOF_CHAR
+            return ParserError(ErrUnexpectedEofExpectedValue)
+        else
+            return ParserError(ErrUnexpectedStartOfValue)
+        end
+    end
+    ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
+    read_underscore |= contains_underscore
+    if (read_digit || ate) && ok_end_value(peek(l))
+        return parse_int(l, contains_underscore)
+    end
+    # Done with integers here
 
-    return SOME(ret)
+    if !read_underscore
+        # No underscores in date / times
+        if peek(l) == '-'
+            return parse_datetime(l)
+        elseif peek(l) == ':'
+            return parse_local_time(l)
+        end
+    end
+    # Done with datetime / localtime here
+
+    # can optionally read a . + digits and then exponent
+    ate_dot = accept(l, '.')
+    ate, contains_underscore = @try accept_batch_underscore(l, isdigit, true)
+    if ate_dot && !ate
+        return ParserError(ErrNoTrailingDigitAfterDot)
+    end
+    read_underscore |= contains_underscore
+    if accept(l, x -> x == 'e' || x == 'E')
+        accept(l, x-> x == '+' || x == '-')
+        # SPEC: (which follows the same rules as decimal integer values but may include leading zeros)
+        read_digit = accept_batch(l, isdigit)
+        ate, read_underscore = @try accept_batch_underscore(l, isdigit, !read_digit)
+        contains_underscore |= read_underscore
+    end
+    if !ok_end_value(peek(l))
+        eat_char(l)
+        return ParserError(ErrGenericValueError)
+    end
+    return parse_float(l, read_underscore)
+end
+
+
+function take_string_or_substring(l, contains_underscore)::Union{String, SubString}
+    subs = take_substring(l)
+    # Need to pass a AbstractString to `parse` so materialize it in case it
+    # contains underscore.
+    return contains_underscore ? filter(!=('_'), subs) : subs
+end
+
+function parse_float(l::Parser, contains_underscore)::Err{Float64}
+    s = take_string_or_substring(l, contains_underscore)
+    v = tryparse(Float64, s)
+    v === nothing && return(ParserError(ErrGenericValueError))
+    return v
+end
+
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int}
+    s = take_string_or_substring(l, contains_underscore)
+    v = try
+        Base.parse(Int, s; base=base)
+    catch e
+        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+    end
+    return v
+end
+
+
+##########################
+# Date / Time / DateTime #
+##########################
+
+ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']' ||
+                               c == '}' || c == ',' || c == '\n'     || c == '\r'
+
+#=
+# https://tools.ietf.org/html/rfc3339
+
+# Internet Protocols MUST generate four digit years in dates.
+
+   date-fullyear   = 4DIGIT
+   date-month      = 2DIGIT  ; 01-12
+   date-mday       = 2DIGIT  ; 01-28, 01-29, 01-30, 01-31 based on
+                             ; month/year
+   time-hour       = 2DIGIT  ; 00-23
+   time-minute     = 2DIGIT  ; 00-59
+   time-second     = 2DIGIT  ; 00-58, 00-59, 00-60 based on leap second
+                             ; rules
+   time-secfrac    = "." 1*DIGIT
+   time-numoffset  = ("+" / "-") time-hour ":" time-minute
+   time-offset     = "Z" / time-numoffset
+
+   partial-time    = time-hour ":" time-minute ":" time-second
+                     [time-secfrac]
+   full-date       = date-fullyear "-" date-month "-" date-mday
+   full-time       = partial-time time-offset
+
+   date-time       = full-date "T" full-time
+=#
+
+accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
+function parse_datetime(l)
+    # Year has already been eaten when we reach here
+    year = parse_int(l, false)::Int
+    year in 0:9999 || return ParserError(ErrParsingDateTime)
+
+    # Month
+    accept(l, '-') || return ParserError(ErrParsingDateTime)
+    set_marker!(l)
+    @try accept_two(l, isdigit)
+    month = parse_int(l, false)
+    month in 1:12 || return ParserError(ErrParsingDateTime)
+    accept(l, '-') || return ParserError(ErrParsingDateTime)
+
+    # Day
+    set_marker!(l)
+    @try accept_two(l, isdigit)
+    day = parse_int(l, false)
+    # Verify the real range in the constructor below
+    day in 1:31 || return ParserError(ErrParsingDateTime)
+
+    # We might have a local date now
+    read_space = false
+    if ok_end_value(peek(l))
+        if (read_space = accept(l, ' '))
+            if !isdigit(peek(l))
+                return try_return_date(l, year, month, day)
+            end
+        else
+            return try_return_date(l, year, month, day)
+        end
+    end
+    if !read_space
+        accept(l, 'T') || accept(l, 't') || return ParserError(ErrParsingDateTime)
+    end
+
+    h, m, s, ms = @try _parse_local_time(l)
+
+    # Julia doesn't support offset times
+    if !accept(l, 'Z')
+        if accept(l, '+') || accept(l, '-')
+            return ParserError(ErrOffsetDateNotSupported)
+        end
+    end
+
+    if !ok_end_value(peek(l))
+        return ParserError(ErrParsingDateTime)
+    end
+
+    # The DateTime parser verifies things like leap year for us
+    return try_return_datetime(l, year, month, day, h, m, s, ms)
+end
+
+function try_return_datetime(p, year, month, day, h, m, s, ms)
+    if p.Dates !== nothing
+        try
+            return p.Dates.DateTime(year, month, day, h, m, s, ms)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return DateTime(year, month, day, h, m, s, ms)
+    end
+end
+
+function try_return_date(p, year, month, day)
+    if p.Dates !== nothing
+        try
+            return p.Dates.Date(year, month, day)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return Date(year, month, day)
+    end
+end
+
+function parse_local_time(l::Parser)
+    h = parse_int(l, false)
+    h in 0:23 || return ParserError(ErrParsingDateTime)
+    _, m, s, ms = @try _parse_local_time(l, true)
+    # TODO: Could potentially parse greater accuracy for the
+    # fractional seconds here.
+    return try_return_time(l, h, m, s, ms)
+end
+
+function try_return_time(p, h, m, s, ms)
+    if p.Dates !== nothing
+        try
+            return p.Dates.Time(h, m, s, ms)
+        catch
+            return ParserError(ErrParsingDateTime)
+        end
+    else
+        return Time(h, m, s, ms)
+    end
+end
+
+function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int}}
+    # Hour has potentially been already parsed in
+    # `parse_number_or_date_start` already
+    if skip_hour
+        hour = 0
+    else
+        set_marker!(l)
+        @try accept_two(l, isdigit)
+        hour = parse_int(l, false)
+        hour in 0:23 || return ParserError(ErrParsingDateTime)
+    end
+
+    accept(l, ':') || return ParserError(ErrParsingDateTime)
+
+    # minute
+    set_marker!(l)
+    @try accept_two(l, isdigit)
+    minute = parse_int(l, false)
+    minute in 0:59 || return ParserError(ErrParsingDateTime)
+
+    accept(l, ':') || return ParserError(ErrParsingDateTime)
+
+    # second
+    set_marker!(l)
+    @try accept_two(l, isdigit)
+    second = parse_int(l, false)
+    second in 0:59 || return ParserError(ErrParsingDateTime)
+
+    # optional fractional second
+    fractional_second = 0
+    if accept(l, '.')
+        set_marker!(l)
+        found_fractional_digit = false
+        for i in 1:3
+            found_fractional_digit |= accept(l, isdigit)
+        end
+        if !found_fractional_digit
+            return ParserError(ErrParsingDateTime)
+        end
+        # DateTime in base only manages 3 significant digits in fractional
+        # second
+        fractional_second = parse_int(l, false)
+        # Truncate off the rest eventual digits
+        accept_batch(l, isdigit)
+    end
+    return hour, minute, second, fractional_second
+end
+
+
+##########
+# String #
+##########
+
+function parse_string_start(l::Parser, quoted::Bool)::Err{String}
+    # Have eaten a `'` if `quoted` is true, otherwise have eaten a `"`
+    multiline = false
+    c = quoted ? '\'' : '"'
+    if accept(l, c) # Eat second quote
+        if !accept(l, c)
+            return ""
+        end
+        accept(l, '\r') # Eat third quote
+        accept(l, '\n') # Eat third quote
+        multiline = true
+    end
+    return parse_string_continue(l, multiline, quoted)
+end
+
+@inline stop_candidates_multiline(x)         = x != '"'  &&  x != '\\'
+@inline stop_candidates_singleline(x)        = x != '"'  &&  x != '\\' && x != '\n'
+@inline stop_candidates_multiline_quoted(x)  = x != '\'' &&  x != '\\'
+@inline stop_candidates_singleline_quoted(x) = x != '\'' &&  x != '\\' && x != '\n'
+
+function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{String}
+    start_chunk = l.prevpos
+    q = quoted ? '\'' : '"'
+    contains_backslash = false
+    offset = multiline ? 3 : 1
+    while true
+        if peek(l) == EOF_CHAR
+            return ParserError(ErrUnexpectedEndString)
+        end
+        if quoted
+            accept_batch(l, multiline ? stop_candidates_multiline_quoted : stop_candidates_singleline_quoted)
+        else
+            accept_batch(l, multiline ? stop_candidates_multiline : stop_candidates_singleline)
+        end
+        if !multiline && peek(l) == '\n'
+            return ParserError(ErrNewLineInString)
+        end
+        next_slash = peek(l) == '\\'
+        if !next_slash
+            # TODO: Doesn't handle values with e.g. format `""""str""""`
+            if accept(l, q) && (!multiline || (accept(l, q) && accept(l, q)))
+                push!(l.chunks, start_chunk:(l.prevpos-offset-1))
+                return take_chunks(l, contains_backslash)
+            end
+        end
+        c = eat_char(l) # eat the character we stopped at
+        next_slash = c == '\\'
+        if next_slash && !quoted
+            if peek(l) == '\n' || peek(l) == '\r'
+                push!(l.chunks, start_chunk:(l.prevpos-1-1)) # -1 due to eating the slash
+                skip_ws_nl_no_comment(l)
+                start_chunk = l.prevpos
+            else
+                c = eat_char(l) # eat the escaped character
+                if c == 'u'  || c == 'U'
+                    n = c == 'u' ? 4 : 6
+                    set_marker!(l)
+                    if !accept_n(l, n, isvalid_hex)
+                        return ParserError(ErrInvalidUnicodeScalar)
+                    end
+                    codepoint = parse_int(l, false, 16)
+                    #=
+                    Unicode Scalar Value
+                    ---------------------
+                    Any Unicode code point except high-surrogate and
+                    low-surrogate code points.  In other words, the ranges of
+                    integers 0 to D7FF16 and E00016 to 10FFFF16 inclusive.
+                    =#
+                    if !(codepoint <= 0xD7FF || 0xE000 <= codepoint <= 0x10FFFF)
+                        return ParserError(ErrInvalidUnicodeScalar)
+                    end
+                elseif c != 'b' && c != 't' && c != 'n' && c != 'f' && c != 'r' && c != '"' && c!= '\\'
+                    return ParserError(ErrInvalidEscapeCharacter)
+                end
+                contains_backslash = true
+            end
+        end
+    end
+end
+
+function take_chunks(l::Parser, unescape::Bool)::String
+    nbytes = sum(length, l.chunks)
+    str = Base._string_n(nbytes)
+    offset = 1
+    for chunk in l.chunks
+        # The SubString constructor takes as an index the first byte of the
+        # last character but we have the last byte.
+        n = length(chunk)
+        GC.@preserve str begin
+            unsafe_copyto!(pointer(str, offset), pointer(l.str, first(chunk)), n)
+        end
+        offset += n
+    end
+    empty!(l.chunks)
+    return unescape ? unescape_string(str) : str
 end

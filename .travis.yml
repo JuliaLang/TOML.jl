@@ -1,18 +1,21 @@
+# Documentation: http://docs.travis-ci.com/user/languages/julia/
 language: julia
 os:
   - linux
   - osx
+  - windows
 julia:
-  - 0.7
-  - 1.0
+  - 1.5
   - nightly
 env:
-    - ARCH="i686"
-    - ARCH="x86_64"
+  - ARCH="i686"
+  - ARCH="x86_64"
 matrix:
   exclude:
     - os: osx
       env: ARCH="i686"
 notifications:
   email: false
-sudo: false
+
+after_success:
+  - julia -e 'using Pkg; Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
