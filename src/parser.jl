@@ -850,10 +850,10 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int}
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     s = take_string_or_substring(l, contains_underscore)
     v = try
-        Base.parse(Int, s; base=base)
+        Base.parse(Int64, s; base=base)
     catch e
         e isa Base.OverflowError && return(ParserError(ErrOverflowError))
         error("internal parser error: did not correctly discredit $(repr(s)) as an int")
