@@ -42,7 +42,7 @@ printvalue(io::IO, value::Dates.Date; sorted=false) =
 printvalue(io::IO, value::Bool; sorted=false) =
     Base.print(io, value ? "true" : "false")
 printvalue(io::IO, value::Integer; sorted=false) =
-    Base.print(io, Int(value))  # TOML specifies 64-bit signed long range for integer
+    Base.print(io, Int64(value))  # TOML specifies 64-bit signed long range for integer
 printvalue(io::IO, value::AbstractFloat; sorted=false) =
     Base.print(io, isnan(value) ? "nan" : 
                    isinf(value) ? string(value > 0 ? "+" : "-", "inf") :

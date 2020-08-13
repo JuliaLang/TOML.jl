@@ -7,7 +7,7 @@ using Dates
 const jsnval = Dict{String,Function}(
     "string" =>identity,
     "float"  => (s -> parse(Float64, s)),
-    "integer"=> (s -> parse(Int, s)),
+    "integer"=> (s -> parse(Int64, s)),
     "datetime" => (s -> (try
         parse(DateTime, s, dateformat"yyyy-mm-ddTHH:MM:SSZ")
         catch e

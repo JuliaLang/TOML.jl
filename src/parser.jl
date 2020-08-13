@@ -771,7 +771,7 @@ function parse_number_or_date_start(l::Parser)
     if accept(l, '0')
         readed_zero = true # Intentional bad grammar to remove the ambiguity in "read"...
         if ok_end_value(peek(l))
-            return 0
+            return Int64(0)
         elseif accept(l, 'x')
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
             ate && return parse_int(l, contains_underscore)
@@ -850,10 +850,10 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int}
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     s = take_string_or_substring(l, contains_underscore)
     v = try
-        Base.parse(Int, s; base=base)
+        Base.parse(Int64, s; base=base)
     catch e
         e isa Base.OverflowError && return(ParserError(ErrOverflowError))
         error("internal parser error: did not correctly discredit $(repr(s)) as an int")
@@ -897,7 +897,7 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
 accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError(ErrParsingDateTime))
 function parse_datetime(l)
     # Year has already been eaten when we reach here
-    year = parse_int(l, false)::Int
+    year = parse_int(l, false)::Int64
     year in 0:9999 || return ParserError(ErrParsingDateTime)
 
     # Month
@@ -992,11 +992,11 @@ function try_return_time(p, h, m, s, ms)
     end
 end
 
-function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int}}
+function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
     # Hour has potentially been already parsed in
     # `parse_number_or_date_start` already
     if skip_hour
-        hour = 0
+        hour = Int64(0)
     else
         set_marker!(l)
         @try accept_two(l, isdigit)
@@ -1021,7 +1021,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int}}
     second in 0:59 || return ParserError(ErrParsingDateTime)
 
     # optional fractional second
-    fractional_second = 0
+    fractional_second = Int64(0)
     if accept(l, '.')
         set_marker!(l)
         found_fractional_digit = false
