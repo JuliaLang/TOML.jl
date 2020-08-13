@@ -2,8 +2,7 @@
 
 import Dates
 
-"Identify if character in subset of bare key symbols"
-isbare(c::AbstractChar) = 'A' <= c <= 'Z' || 'a' <= c <= 'z' || isdigit(c) || c == '-' || c == '_'
+import ..isvalid_barekey_char
 
 function printkey(io::IO, keys::Vector{String})
     for (i, k) in enumerate(keys)
@@ -11,9 +10,9 @@ function printkey(io::IO, keys::Vector{String})
         if length(k) == 0
             # empty key
             Base.print(io, "\"\"")
-        elseif !all([isbare(c) for c in k])
+        elseif any(!isvalid_barekey_char, k)
             # quoted key
-            Base.print(io, "\"$(escape_string(k))\"")
+            Base.print(io, "\"", escape_string(k) ,"\"")
         else
             Base.print(io, k)
         end
@@ -64,7 +63,7 @@ function _print(io::IO, a::AbstractDict,
 )
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys), by = by)
+        akeys = sort!(collect(akeys); by)
     end
 
     for key in akeys
