@@ -2,107 +2,105 @@ using Test
 using TOML
 using TOML: Internals
 
-macro testval(s, v)
+function testval(s, v)
     f = "foo = $s"
-    :( @test TOML.parsestring($f)["foo"] == $v )
+    return TOML.parsestring(f)["foo"] == v
 end
 
-macro failval(s, v)
+function failval(s, v)
     f = "foo = $s"
-    :( err = TOML.tryparsestring($f);
-       @test err isa TOML.Internals.ParserError;
-       @test err.type == $v;
-    )
+    err = TOML.tryparsestring(f);
+    return err isa TOML.Internals.ParserError && err.type == v
 end
 
 @testset "Numbers" begin
-    @failval("00"                   , Internals.ErrParsingDateTime)
-    @failval("-00"                  , Internals.ErrParsingDateTime)
-    @failval("+00"                  , Internals.ErrParsingDateTime)
-    @failval("00.0"                 , Internals.ErrParsingDateTime)
-    @failval("-00.0"                , Internals.ErrParsingDateTime)
-    @failval("+00.0"                , Internals.ErrParsingDateTime)
-    @failval("9223372036854775808"  , Internals.ErrOverflowError)
-    @failval("-9223372036854775809" , Internals.ErrOverflowError)
+    @test failval("00"                   , Internals.ErrParsingDateTime)
+    @test failval("-00"                  , Internals.ErrParsingDateTime)
+    @test failval("+00"                  , Internals.ErrParsingDateTime)
+    @test failval("00.0"                 , Internals.ErrParsingDateTime)
+    @test failval("-00.0"                , Internals.ErrParsingDateTime)
+    @test failval("+00.0"                , Internals.ErrParsingDateTime)
+    @test failval("9223372036854775808"  , Internals.ErrOverflowError)
+    @test failval("-9223372036854775809" , Internals.ErrOverflowError)
 
-    @failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
-    @failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)
-    @failval("0.E"       , Internals.ErrNoTrailingDigitAfterDot)
-    @failval("0.0E"      , Internals.ErrGenericValueError)
-    @failval("0.0e"      , Internals.ErrGenericValueError)
-    @failval("0.0e-"     , Internals.ErrGenericValueError)
-    @failval("0.0e+"     , Internals.ErrGenericValueError)
-    # @failval("0.0e+00" , Internals.ErrGenericValueError)
+    @test failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.E"       , Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.0E"      , Internals.ErrGenericValueError)
+    @test failval("0.0e"      , Internals.ErrGenericValueError)
+    @test failval("0.0e-"     , Internals.ErrGenericValueError)
+    @test failval("0.0e+"     , Internals.ErrGenericValueError)
+    @test_broken failval("0.0e+00" , Internals.ErrGenericValueError)
 
-    @testval("1.0"         , 1.0)
-    @testval("1.0e0"       , 1.0)
-    @testval("1.0e+0"      , 1.0)
-    @testval("1.0e-0"      , 1.0)
-    @testval("1.001e-0"    , 1.001)
-    @testval("2e10"        , 2e10)
-    @testval("2e+10"       , 2e10)
-    @testval("2e-10"       , 2e-10)
-    @testval("2_0.0"       , 20.0)
-    @testval("2_0.0_0e0_0" , 20.0)
-    @testval("2_0.1_0e1_0" , 20.1e10)
+    @test testval("1.0"         , 1.0)
+    @test testval("1.0e0"       , 1.0)
+    @test testval("1.0e+0"      , 1.0)
+    @test testval("1.0e-0"      , 1.0)
+    @test testval("1.001e-0"    , 1.001)
+    @test testval("2e10"        , 2e10)
+    @test testval("2e+10"       , 2e10)
+    @test testval("2e-10"       , 2e-10)
+    @test testval("2_0.0"       , 20.0)
+    @test testval("2_0.0_0e0_0" , 20.0)
+    @test testval("2_0.1_0e1_0" , 20.1e10)
 
-    @testval("1_0"    , 10)
-    @testval("1_0_0"  , 100)
-    @testval("1_000"  , 1000)
-    @testval("+1_000" , 1000)
-    @testval("-1_000" , -1000)
+    @test testval("1_0"    , 10)
+    @test testval("1_0_0"  , 100)
+    @test testval("1_000"  , 1000)
+    @test testval("+1_000" , 1000)
+    @test testval("-1_000" , -1000)
 
-    @failval("0_"     , Internals.ErrLeadingZeroNotAllowedInteger)
-    @failval("0__0"   , Internals.ErrLeadingZeroNotAllowedInteger)
-    @failval("__0"    , Internals.ErrUnexpectedStartOfValue)
-    @failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
-    @failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
+    @test failval("0_"     , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("0__0"   , Internals.ErrLeadingZeroNotAllowedInteger)
+    @test failval("__0"    , Internals.ErrUnexpectedStartOfValue)
+    @test failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
+    @test failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
 end
 
 
 @testset "Booleans" begin
-    @testval("true", true)
-    @testval("false", false)
+    @test testval("true", true)
+    @test testval("false", false)
 
-    @failval("true2"  , Internals.ErrExpectedNewLineKeyValue)
-    @failval("false2" , Internals.ErrExpectedNewLineKeyValue)
-    @failval("talse"  , Internals.ErrGenericValueError)
-    @failval("frue"   , Internals.ErrGenericValueError)
-    @failval("t1"     , Internals.ErrGenericValueError)
-    @failval("f1"     , Internals.ErrGenericValueError)
+    @test failval("true2"  , Internals.ErrExpectedNewLineKeyValue)
+    @test failval("false2" , Internals.ErrExpectedNewLineKeyValue)
+    @test failval("talse"  , Internals.ErrGenericValueError)
+    @test failval("frue"   , Internals.ErrGenericValueError)
+    @test failval("t1"     , Internals.ErrGenericValueError)
+    @test failval("f1"     , Internals.ErrGenericValueError)
 end
 
 @testset "Datetime" begin
-    @testval("2016-09-09T09:09:09"     , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
-    @testval("2016-09-09T09:09:09Z"    , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
-    @testval("2016-09-09T09:09:09.0Z"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
-    @testval("2016-09-09T09:09:09.012" , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 12))
+    @test testval("2016-09-09T09:09:09"     , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
+    @test testval("2016-09-09T09:09:09Z"    , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
+    @test testval("2016-09-09T09:09:09.0Z"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
+    @test testval("2016-09-09T09:09:09.012" , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 12))
 
-    @failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
-    @failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
-    @failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
-    @failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
 
-    @failval("2016-09-09T09:09:09.Z" , Internals.ErrParsingDateTime)
-    @failval("2016-9-09T09:09:09Z"   , Internals.ErrParsingDateTime)
-    @failval("2016-13-09T09:09:09Z"  , Internals.ErrParsingDateTime)
-    @failval("2016-02-31T09:09:09Z"  , Internals.ErrParsingDateTime)
-    @failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
-    @failval("2016-09-09s09:09:09Z"  , Internals.ErrParsingDateTime)
-    @failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09.Z" , Internals.ErrParsingDateTime)
+    @test failval("2016-9-09T09:09:09Z"   , Internals.ErrParsingDateTime)
+    @test failval("2016-13-09T09:09:09Z"  , Internals.ErrParsingDateTime)
+    @test failval("2016-02-31T09:09:09Z"  , Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
+    @test failval("2016-09-09s09:09:09Z"  , Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
 end
 
 @testset "Time" begin
-    @testval("09:09:09.99"    , Time(9 , 9 , 9 , 99))
-    @testval("09:09:09.99999" , Time(9 , 9 , 9 , 999))
+    @test testval("09:09:09.99"    , Time(9 , 9 , 9 , 99))
+    @test testval("09:09:09.99999" , Time(9 , 9 , 9 , 999))
 
-    @failval("09:09x09", Internals.ErrParsingDateTime)
+    @test failval("09:09x09", Internals.ErrParsingDateTime)
 end
 
 # TODO: Add more dedicated value tests
 
 @testset "String" begin
-    @failval("\"foooo", Internals.ErrUnexpectedEndString)
+    @test failval("\"foooo", Internals.ErrUnexpectedEndString)
 
     #=
     Found these examples of string tests somewhere
