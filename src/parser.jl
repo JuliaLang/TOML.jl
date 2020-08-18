@@ -853,11 +853,11 @@ function parse_number_or_date_start(l::Parser)
 end
 
 
-function take_string_or_substring(l, contains_underscore)::Union{String, SubString}
+function take_string_or_substring(l, contains_underscore)::SubString
     subs = take_substring(l)
     # Need to pass a AbstractString to `parse` so materialize it in case it
     # contains underscore.
-    return contains_underscore ? filter(!=('_'), subs) : subs
+    return contains_underscore ? SubString(filter(!=('_'), subs)) : subs
 end
 
 function parse_float(l::Parser, contains_underscore)::Err{Float64}
