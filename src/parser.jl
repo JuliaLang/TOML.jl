@@ -24,8 +24,6 @@ DateTime(y, m, d, h, mi, s, ms) =
 const EOF_CHAR = typemax(Char)
 
 const TOMLDict  = Dict{String, Any}
-const TOMLArray = Vector{Any}
-
 
 ##########
 # Parser #
@@ -64,7 +62,7 @@ mutable struct Parser
     # We need to keep track of those tables / arrays that are defined
     # inline since we are not allowed to add keys to those
     inline_tables::IdSet{TOMLDict}
-    static_arrays::IdSet{TOMLArray}
+    static_arrays::IdSet{Any}
 
     # [a.b.c.d] doesn't "define" the table [a]
     # so keys can later be added to [a], therefore
@@ -98,7 +96,7 @@ function Parser(str::String; filepath=nothing)
             String[],             # dotted_keys
             UnitRange{Int}[],     # chunks
             IdSet{TOMLDict}(),    # inline_tables
-            IdSet{TOMLArray}(),   # static_arrays
+            IdSet{Any}(),   # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
@@ -478,7 +476,7 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
     for i in 1:length(dotted_keys)
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
-        if d isa TOMLArray
+        if d isa Vector
             d = d[end]
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
@@ -647,23 +645,42 @@ end
 # Array #
 #########
 
-function parse_array(l::Parser)::Err{TOMLArray}
-    array = Any[]
-    push!(l.static_arrays, array)
+function push!!(v::Vector, el)
+    T = eltype(v)
+    if el isa T || typeof(el) === T
+        push!(v, el::T)
+        return v
+    else
+        if typeof(T) === Union
+            newT = Base.typejoin(T, typeof(el))
+        else
+            newT = Union{T, typeof(el)}
+        end
+        new = Array{newT}(undef, length(v))
+        copy!(new, v)
+        return push!!(new, el)
+    end
+end
+
+function parse_array(l::Parser)::Err{Vector}
     skip_ws_nl(l)
-    accept(l, ']') && return array
-    while true
+    array = Union{}[]
+    empty_array = accept(l, ']')
+    while !empty_array
         v = @try parse_value(l)
-        push!(array, v)
+        # TODO: Worth to function barrier this?
+        array = push!!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
         skip_ws_nl(l)
         comma = accept(l, ',')
         skip_ws_nl(l)
-        accept(l, ']') && return array
+        accept(l, ']') && break
         if !comma
             return ParserError(ErrExpectedCommaBetweenItemsArray)
         end
     end
+    push!(l.static_arrays, array)
+    return array
 end
 
 
