@@ -16,6 +16,12 @@ jobs:
     - os: osx
       arch: x86
   include:
+    - stage: "Benchmarks"
+      julia: 1.5
+      os: linux
+      script:
+        - julia --project=benchmark/ -e 'using Pkg; Pkg.instantiate(); include("benchmark/benchmarks.jl"); run(SUITE)'
+      after_success: skip
     - stage: "Documentation"
       julia: 1.5
       os: linux
