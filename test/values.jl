@@ -4,7 +4,8 @@ using TOML: Internals
 
 function testval(s, v)
     f = "foo = $s"
-    return TOML.parsestring(f)["foo"] == v
+    parsed = TOML.parsestring(f)["foo"]
+    return isequal(v, parsed) && typeof(v) == typeof(parsed)
 end
 
 function failval(s, v)
@@ -44,11 +45,11 @@ end
     @test testval("2_0.0_0e0_0" , 20.0)
     @test testval("2_0.1_0e1_0" , 20.1e10)
 
-    @test testval("1_0"    , 10)
-    @test testval("1_0_0"  , 100)
-    @test testval("1_000"  , 1000)
-    @test testval("+1_000" , 1000)
-    @test testval("-1_000" , -1000)
+    @test testval("1_0"    , 10    |> Int64)
+    @test testval("1_0_0"  , 100   |> Int64)
+    @test testval("1_000"  , 1000  |> Int64)
+    @test testval("+1_000" , 1000  |> Int64)
+    @test testval("-1_000" , -1000 |> Int64)
 
     @test failval("0_"     , Internals.ErrLeadingZeroNotAllowedInteger)
     @test failval("0__0"   , Internals.ErrLeadingZeroNotAllowedInteger)
@@ -126,4 +127,11 @@ end
     quot9="""""\"""\"""""" # valid (3 in the middle 5 at start, 6 at end)
 
     =#
+end
+
+@testset "Array" begin
+    @test testval("[1,2,3]", Int64[1,2,3])
+    @test testval("[1.0, 2.0, 3.0]", Float64[1.0, 2.0, 3.0])
+    @test testval("[1.0, 2.0, 3]", Union{Int64, Float64}[1.0, 2.0, Int64(3)])
+    @test testval("[1.0, 2, \"foo\"]", Any[1.0, Int64(2), "foo"])
 end
