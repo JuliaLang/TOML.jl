@@ -16,7 +16,7 @@ julia> data = """
 
 julia> TOML.parsestring(data)
 Dict{String,Any} with 1 entry:
-  "database" => Dict{String,Any}("server"=>"192.168.1.1","ports"=>Any[8001, 800…
+  "database" => Dict{String,Any}("server"=>"192.168.1.1","ports"=>[8001, 8001, …
 ```
 
 To parse a file, use [`TOML.parsefile`](@ref). If the file has a syntax error,
@@ -72,15 +72,43 @@ julia> data = Dict(
           "age" => [10, 20],
        );
 
-julia> open(fname, "w") do io
-           TOML.print(io, data)
-       end;
-
-julia> print(read(fname, String))
+julia> TOML.print(data)
 names = ["Julia", "Julio"]
 age = [10, 20]
 ```
 
+Keys can be sorted according to some value
+
+```jldoctest
+julia> using TOML
+
+julia> TOML.print(Dict(
+       "abc"  => 1,
+       "ab"   => 2,
+       "abcd" => 3,
+       ); sorted=true, by=length)
+ab = 2
+abc = 1
+abcd = 3
+```
+
+For custom structs, pass a function that converts the struct to a supported
+type
+
+```jldoctest
+julia> using TOML
+
+julia> struct MyStruct
+           a::Int
+           b::String
+       end
+
+julia> TOML.print(Dict("foo" => MyStruct(5, "bar"))) do x
+           x isa MyStruct && return [x.a, x.b]
+           error("unhandled type $(typeof(x))")
+       end
+foo = [5, "bar"]
+```
 
 
 ## References
