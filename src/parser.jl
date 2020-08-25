@@ -432,7 +432,13 @@ take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
 
 # Driver, keeps parsing toplevel until we either get
 # a `ParserError` or eof.
-function parse(l::Parser; raise=false)::Err{TOMLDict}
+function parse(l::Parser)::TOMLDict
+    v = tryparse(l)
+    v isa ParserError && throw(v)
+    return v
+end
+
+function tryparse(l::Parser)::Err{TOMLDict}
     while true
         skip_ws_nl(l)
         peek(l) == EOF_CHAR && break
@@ -444,7 +450,7 @@ function parse(l::Parser; raise=false)::Err{TOMLDict}
             v.filepath = l.filepath
             v.line     = l.line
             v.column   = l.column-1
-            raise ? throw(v) : return v
+            return v
         end
     end
     return l.root
@@ -862,7 +868,7 @@ end
 
 function parse_float(l::Parser, contains_underscore)::Err{Float64}
     s = take_string_or_substring(l, contains_underscore)
-    v = tryparse(Float64, s)
+    v = Base.tryparse(Float64, s)
     v === nothing && return(ParserError(ErrGenericValueError))
     return v
 end

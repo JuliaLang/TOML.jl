@@ -31,9 +31,9 @@ Parses a file `f` and returns the resulting table (dictionary). Throws a
 See also [`TOML.tryparsefile`](@ref)
 """
 parsefile(f::AbstractString) =
-    Internals.parse(Parser(read(f, String); filepath=abspath(f)); raise=true)
+    Internals.parse(Parser(read(f, String); filepath=abspath(f)))
 parsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, read(f, String); filepath=abspath(f)); raise=true)
+    Internals.parse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
     tryparsefile(f::AbstractString)
@@ -45,9 +45,9 @@ Parses a file `f` and returns the resulting table (dictionary). Returns a
 See also [`TOML.parsefile`](@ref)
 """
 tryparsefile(f::AbstractString) =
-    Internals.parse(Parser(read(f, String); filepath=abspath(f)); raise=false)
+    Internals.tryparse(Parser(read(f, String); filepath=abspath(f)))
 tryparsefile(p::Parser, f::AbstractString) =
-    Internals.parse(Internals.reinit!(p, read(f, String); filepath=abspath(f)); raise=false)
+    Internals.tryparse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
     parsestring(str::AbstractString)
@@ -59,9 +59,9 @@ Parses a string `str` and returns the resulting table (dictionary). Returns a
 See also [`TOML.tryparsestring`](@ref)
 """
 parsestring(str::AbstractString) =
-    Internals.parse(Parser(String(str)); raise=true)
+    Internals.parse(Parser(String(str)))
 parsestring(p::Parser, str::AbstractString) =
-    Internals.parse(Internals.reinit!(p, String(str)); raise=true)
+    Internals.parse(Internals.reinit!(p, String(str)))
 
 """
     tryparsestring(str::AbstractString)
@@ -73,9 +73,9 @@ Parses a string `str` and returns the resulting table (dictionary). Returns a
 See also [`TOML.parsestring`](@ref)
 """
 tryparsestring(str::AbstractString) =
-    Internals.parse(Parser(String(str)); raise=false)
+    Internals.tryparse(Parser(String(str)))
 tryparsestring(p::Parser, str::AbstractString) =
-    Internals.parse(Internals.reinit!(p, String(str)); raise=false)
+    Internals.tryparse(Internals.reinit!(p, String(str)))
 
 """
     ParserError
@@ -91,9 +91,17 @@ const ParserError = Internals.ParserError
 
 
 """
-    print(io::IO, data::AbstractDict)
+    print([to_toml::Function], io::IO [=stdout], data::AbstractDict; sort=false, by=identity)
 
-Writes `data` into TOML syntax to the stream `io`.
+Writes `data` as TOML syntax to the stream `io`. The keyword argument `sort`
+sorts the output on the keys of the tables with the top level tables are
+sorted according to the keyword argument `by`.
+
+The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
+`Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
+need to be convertible to `Float64` and `Int64` respectively. For other data types,
+pass the function `to_toml` that takes the data types and returns a value of a
+supported type.
 """
 const print = Internals.Printer.print
 

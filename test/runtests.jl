@@ -18,3 +18,6 @@ include("toml_test.jl")
 include("values.jl")
 include("invalids.jl")
 include("error_printing.jl")
+include("print.jl")
+
+@inferred TOML.parsestring("foo = 3")
