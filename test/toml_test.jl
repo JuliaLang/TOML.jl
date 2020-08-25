@@ -1,4 +1,3 @@
-using JSON
 using TOML
 
 using Test
@@ -36,7 +35,7 @@ valid_test_folder = joinpath(@__DIR__, "testfiles", "valid")
 
 function check_valid(f)
     fp = joinpath(valid_test_folder, f)
-    jsn = jsn2data(JSON.parsefile(fp * ".json"))
+    jsn = jsn2data(@eval include("fp" * ".jl"))
     tml = TOML.parsefile(fp * ".toml")
     return tml == jsn
 end
