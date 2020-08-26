@@ -4,13 +4,13 @@ using TOML: Internals
 
 function testval(s, v)
     f = "foo = $s"
-    parsed = TOML.parsestring(f)["foo"]
+    parsed = TOML.parse(f)["foo"]
     return isequal(v, parsed) && typeof(v) == typeof(parsed)
 end
 
 function failval(s, v)
     f = "foo = $s"
-    err = TOML.tryparsestring(f);
+    err = TOML.tryparse(f);
     return err isa TOML.Internals.ParserError && err.type == v
 end
 

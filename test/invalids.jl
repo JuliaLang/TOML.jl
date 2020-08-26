@@ -8,7 +8,7 @@ bar = 3
 quiz = 3
 """
 
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrDuplicatedKey
 
@@ -18,7 +18,7 @@ str = """
 [foo]
 bar = 2
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
@@ -28,7 +28,7 @@ str = """
 [foo.bar]
 q = 3
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 
 end

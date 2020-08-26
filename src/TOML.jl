@@ -15,7 +15,7 @@ end
 
 Constructor for a TOML `Parser`.  Note that in most cases one does not need to
 explicitly create a `Parser` but instead one directly use use
-[`TOML.parsefile`](@ref) or [`parsestring`](@ref).  Using an explicit parser
+[`TOML.parsefile`](@ref) or [`TOML.parse`](@ref).  Using an explicit parser
 will however reuse some internal data structures which can be beneficial for
 performance if a larger number of small files are parsed.
 """
@@ -50,37 +50,37 @@ tryparsefile(p::Parser, f::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, read(f, String); filepath=abspath(f)))
 
 """
-    parsestring(str::AbstractString)
-    parsestring(p::Parser, str::AbstractString)
+    parse(str::AbstractString)
+    parse(p::Parser, str::AbstractString)
 
 Parses a string `str` and returns the resulting table (dictionary). Returns a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.tryparsestring`](@ref)
+See also [`TOML.tryparse`](@ref)
 """
-parsestring(str::AbstractString) =
+parse(str::AbstractString) =
     Internals.parse(Parser(String(str)))
-parsestring(p::Parser, str::AbstractString) =
+parse(p::Parser, str::AbstractString) =
     Internals.parse(Internals.reinit!(p, String(str)))
 
 """
-    tryparsestring(str::AbstractString)
-    tryparsestring(p::Parser, str::AbstractString)
+    tryparse(str::AbstractString)
+    tryparse(p::Parser, str::AbstractString)
 
 Parses a string `str` and returns the resulting table (dictionary). Returns a
 [`ParserError`](@ref) upon failure.
 
-See also [`TOML.parsestring`](@ref)
+See also [`TOML.parse`](@ref)
 """
-tryparsestring(str::AbstractString) =
+tryparse(str::AbstractString) =
     Internals.tryparse(Parser(String(str)))
-tryparsestring(p::Parser, str::AbstractString) =
+tryparse(p::Parser, str::AbstractString) =
     Internals.tryparse(Internals.reinit!(p, String(str)))
 
 """
     ParserError
 
-Type that is returned from [`tryparsestring`](@ref) and [`tryparsefile`](@ref)
+Type that is returned from [`tryparse`](@ref) and [`tryparsefile`](@ref)
 when parsing fails. It contains (among others) the following fields:
 
 - `pos`, the position in the string when the error happened
