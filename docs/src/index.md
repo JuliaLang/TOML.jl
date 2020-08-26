@@ -14,7 +14,7 @@ julia> data = """
            ports = [ 8001, 8001, 8002 ]
        """;
 
-julia> TOML.parsestring(data)
+julia> TOML.parse(data)
 Dict{String,Any} with 1 entry:
   "database" => Dict{String,Any}("server"=>"192.168.1.1","ports"=>[8001, 8001, …
 ```
@@ -25,7 +25,7 @@ an exception is thrown:
 ```jldoctest
 julia> using TOML
 
-julia> TOML.parsestring("""
+julia> TOML.parse("""
            value = 0.0.0
        """)
 ERROR: TOML Parser error:
@@ -35,14 +35,14 @@ none:1:16 error: failed to parse value
 [...]
 ```
 
-There are other versions of the parse functions ([`TOML.tryparsestring`](@ref)
+There are other versions of the parse functions ([`TOML.tryparse`](@ref)
 and [`TOML.tryparsefile`]) that instead of throwing exceptions on parser error
 returns a [`TOML.ParserError`](@ref) with information:
 
 ```jldoctest
 julia> using TOML
 
-julia> err = TOML.tryparsestring("""
+julia> err = TOML.tryparse("""
            value = 0.0.0
        """);
 
@@ -113,9 +113,9 @@ foo = [5, "bar"]
 
 ## References
 ```@docs
-TOML.parsestring
+TOML.parse
 TOML.parsefile
-TOML.tryparsestring
+TOML.tryparse
 TOML.tryparsefile
 TOML.print
 TOML.Parser

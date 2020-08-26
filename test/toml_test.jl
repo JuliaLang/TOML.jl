@@ -79,7 +79,9 @@ end
 @test check_valid("nested-inline-table-array")
 @test check_valid("newline-crlf")
 @test check_valid("newline-lf")
-if Sys.iswindows()
+if Sys.iswindows() &&
+    # Sometimes git normalizes the line endings
+    contains(read(joinpath(valid_test_folder, "raw-multiline-string-win.toml"), String), '\r')
     @test check_valid("raw-multiline-string-win")
 else
     @test check_valid("raw-multiline-string")
