@@ -37,7 +37,7 @@ hosts = [
 ]
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["title"] == "TOML Example"
 @test d["owner"]["name"] == "Tom Preston-Werner"
 @test d["database"] == Dict(
@@ -69,7 +69,7 @@ key = "value"  # This is a comment at the end of a line
 another = "# This is not a comment"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict("key" => "value", "another" => "# This is not a comment")
+@test parse(str) == Dict("key" => "value", "another" => "# This is not a comment")
 
 end # testset
 
@@ -79,14 +79,14 @@ end # testset
 str = """
 key = # INVALID
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrUnexpectedStartOfValue
 
 str = """
 first = "Tom" last = "Preston-Werner" # INVALID
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrExpectedNewLineKeyValue
 
@@ -101,7 +101,7 @@ bare-key = "value"
 1234 = "value"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "key" => "value",
   "bare_key" => "value",
   "bare-key" => "value",
@@ -116,7 +116,7 @@ str = """
 'quoted "value"' = "value"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "127.0.0.1" => "value",
   "character encoding" => "value",
   "ʎǝʞ" => "value",
@@ -127,20 +127,20 @@ str = """
 str = """
 = "no key name"  # INVALID
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrEmptyBareKey
 
 str = """
 "" = "blank"     # VALID but discouraged
 """
-@test parsestring(str) == Dict("" => "blank")
+@test parse(str) == Dict("" => "blank")
 
 str = """
 '' = 'blank'     # VALID but discouraged
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict("" => "blank")
+@test parse(str) == Dict("" => "blank")
 
 str = """
 name = "Orange"
@@ -150,7 +150,7 @@ site."google.com" = true
 """
 
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "name" => "Orange",
   "physical" => Dict("color" => "orange", "shape" => "round"),
   "site" => Dict("google.com" => true)
@@ -161,7 +161,7 @@ str = """
 name = "Tom"
 name = "Pradyun"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
@@ -170,7 +170,7 @@ str = """
 spelling = "favorite"
 "spelling" = "favourite"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
@@ -178,7 +178,7 @@ str = """
 3.14159 = "pi"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict("3" => Dict("14159" => "pi"))
+@test parse(str) == Dict("3" => Dict("14159" => "pi"))
 
 
 str = """
@@ -189,7 +189,7 @@ fruit.apple.smooth = true
 fruit.orange = 2
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "fruit" => Dict("orange" => 2,
                   "apple" => Dict("smooth" => true)))
 
@@ -203,7 +203,7 @@ fruit.apple = 1
 # You can't turn an integer into a table.
 fruit.apple.smooth = true
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
@@ -220,7 +220,7 @@ apple.color = "red"
 orange.color = "orange"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "apple" => Dict("type" => "fruit", "skin" => "thin", "color" => "red"),
   "orange" => Dict("type" => "fruit", "skin" => "thick", "color" => "orange"),
 )
@@ -237,7 +237,7 @@ orange.skin = "thick"
 orange.color = "orange"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "apple" => Dict("type" => "fruit", "skin" => "thin", "color" => "red"),
   "orange" => Dict("type" => "fruit", "skin" => "thick", "color" => "orange"),
 )
@@ -249,7 +249,7 @@ end #testset
 
 str = """str = "I'm a string. \\"You can quote me\\". Name\\tJos\\u00E9\\nLocation\\tSF." """
 @test roundtrip(str)
-@test parsestring(str) == Dict("str" => "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.")
+@test parse(str) == Dict("str" => "I'm a string. \"You can quote me\". Name\tJos\u00E9\nLocation\tSF.")
 
 str = """str1 = \"\"\"
 Roses are red
@@ -257,7 +257,7 @@ Violets are blue
 \"\"\"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict("str1" => """
+@test parse(str) == Dict("str1" => """
 Roses are red
 Violets are blue
 """)
@@ -280,7 +280,7 @@ str3 = \"\"\"\\
        \"\"\"
 """
 @test roundtrip(str)
-d = @test parsestring(str)["str1"] == parsestring(str)["str2"] == parsestring(str)["str3"]
+d = @test parse(str)["str1"] == parse(str)["str2"] == parse(str)["str3"]
 
 str = """
 str4 = \"\"\"Here are two quotation marks: \"\". Simple enough.\"\"\"
@@ -288,7 +288,7 @@ str5 = \"\"\"Here are three quotation marks: \"\"\\\".\"\"\"
 str6 = \"\"\"Here are fifteen quotation marks: \"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\"\"\"\\\".\"\"\"
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["str4"] == "Here are two quotation marks: \"\". Simple enough."
 @test d["str5"] == "Here are three quotation marks: \"\"\"."
 @test d["str6"] == "Here are fifteen quotation marks: \"\"\"\"\"\"\"\"\"\"\"\"\"\"\"."
@@ -297,7 +297,7 @@ str = """
 # "This," she said, "is just a pointless statement."
 str7 = \"\"\"\"This,\" she said, \"is just a pointless statement.\"\"\"\"
 """
-@test_broken parsestring(str)
+@test_broken parse(str)
 
 """
 str5 = \"\"\"Here are three quotation marks: \"\"\".\"\"\"  # INVALID
@@ -311,7 +311,7 @@ quoted   = 'Tom "Dubs" Preston-Werner'
 regex    = '<\i\c*\s*>'
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["winpath"] == raw"C:\Users\nodejs\templates"
 @test d["winpath2"] == raw"\\ServerX\admin$\system32\\"
 @test d["quoted"] == raw"""Tom "Dubs" Preston-Werner"""
@@ -327,7 +327,7 @@ trimmed in raw strings.
 '''
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["regex2"] == raw"I [dw]on't need \d{2} apples"
 @test d["lines"] == raw"""
 The first newline is
@@ -344,12 +344,12 @@ apos15 = "Here are fifteen apostrophes: '''''''''''''''"
 # 'That,' she said, 'is still pointless.'
 str = ''''That,' she said, 'is still pointless.''''
 """
-@test_broken parsestring(str)
+@test_broken parse(str)
 
 str = """
 apos15 = '''Here are fifteen apostrophes: ''''''''''''''''''  # INVALID
 """
-@test tryparsestring(str) isa ParserError
+@test tryparse(str) isa ParserError
 
 end # testset
 
@@ -364,7 +364,7 @@ int5 = -0
 int6 = +0
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["int1"] === Int64(99)
 @test d["int2"] === Int64(42)
 @test d["int3"] === Int64(0)
@@ -380,7 +380,7 @@ int7 = 53_49_221  # Indian number system grouping
 int8 = 1_2_3_4_5  # VALID but discouraged
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["int5"] == 1_000
 @test d["int6"] == 5_349_221
 @test d["int7"] == 53_49_221
@@ -400,7 +400,7 @@ oct2 = 0o755 # useful for Unix file permissions
 bin1 = 0b11010110
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["hex1"] == 0xDEADBEEF
 @test d["hex2"] == 0xdeadbeef
 @test d["hex3"] == 0xdead_beef
@@ -416,21 +416,21 @@ low = -9_223_372_036_854_775_808
 high = 9_223_372_036_854_775_807
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["low"] == -9_223_372_036_854_775_808
 @test d["high"] == 9_223_372_036_854_775_807
 
 str = """
 toolow = -9_223_372_036_854_775_809
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrOverflowError
 
 str = """
 toohigh = 9_223_372_036_854_775_808
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrOverflowError
 
@@ -455,7 +455,7 @@ flt7 = 6.626e-34
 flt8 = 224_617.445_991_228
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["flt1"] == +1.0
 @test d["flt2"] == 3.1415
 @test d["flt3"] == -0.01
@@ -470,7 +470,7 @@ str = """
 # INVALID FLOATS
 invalid_float_1 = .7
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrLeadingDot
 
@@ -478,7 +478,7 @@ str = """
 # INVALID FLOATS
 invalid_float_2 = 7.
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrNoTrailingDigitAfterDot
 
@@ -486,7 +486,7 @@ str = """
 # INVALID FLOATS
 invalid_float_3 = 3.e+20
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrNoTrailingDigitAfterDot
 
@@ -502,7 +502,7 @@ sf5 = +nan # same as `nan`
 sf6 = -nan # valid, actual encoding is implementation-specific
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["sf1"] == Inf
 @test d["sf2"] == Inf
 @test d["sf3"] == -Inf
@@ -519,7 +519,7 @@ bool1 = true
 bool2 = false
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["bool1"] === true
 @test d["bool2"] === false
 
@@ -530,25 +530,25 @@ d = parsestring(str)
 str = "odt1 = 1979-05-27T07:32:00.99999Z"
 # Truncated milliseconds
 @test roundtrip(str)
-@test parsestring(str)["odt1"] == parse(DateTime, "1979-05-27T07:32:00.999Z", dateformat"yyyy-mm-ddTHH:MM:SS.sZ")
+@test parse(str)["odt1"] == Base.parse(DateTime, "1979-05-27T07:32:00.999Z", dateformat"yyyy-mm-ddTHH:MM:SS.sZ")
 
 # Julia doesn't support offset datetimes
 str = "odt2 = 1979-05-27T00:32:00-07:00"
-err = tryparsestring(str)
+err = tryparse(str)
 @test_broken err isa Dict
 @test err isa Internals.ParserError
 @test err.type == Internals.ErrOffsetDateNotSupported
 
 str = "odt3 = 1979-05-27T00:32:00.999999-07:00"
-err = tryparsestring(str)
+err = tryparse(str)
 @test_broken err isa Dict
 @test err isa Internals.ParserError
 @test err.type == Internals.ErrOffsetDateNotSupported
 
 str = "odt4 = 1979-05-27 07:32:00Z"
 @test roundtrip(str)
-d = parsestring(str)
-@test d["odt4"] == parse(DateTime, "1979-05-27 07:32:00Z", dateformat"yyyy-mm-dd HH:MM:SSZ")
+d = parse(str)
+@test d["odt4"] == Base.parse(DateTime, "1979-05-27 07:32:00Z", dateformat"yyyy-mm-dd HH:MM:SSZ")
 
 end
 
@@ -560,9 +560,9 @@ ldt1 = 1979-05-27T07:32:00
 ldt2 = 1979-05-27T00:32:00.999999
 """
 @test roundtrip(str)
-d = parsestring(str)
-@test d["ldt1"] == parse(DateTime, "1979-05-27T07:32:00")
-@test d["ldt2"] == parse(DateTime, "1979-05-27T00:32:00.999")
+d = parse(str)
+@test d["ldt1"] == Base.parse(DateTime, "1979-05-27T07:32:00")
+@test d["ldt2"] == Base.parse(DateTime, "1979-05-27T00:32:00.999")
 
 end
 
@@ -573,8 +573,8 @@ str = """
 ld1 = 1979-05-27
 """
 @test roundtrip(str)
-d = parsestring(str)
-@test d["ld1"] == parse(Date, "1979-05-27")
+d = parse(str)
+@test d["ld1"] == Base.parse(Date, "1979-05-27")
 
 end
 
@@ -586,7 +586,7 @@ lt1 = 07:32:00
 lt2 = 00:32:00.999999
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["lt1"] == Time(07, 32, 00)
 @test d["lt2"] == Time(00, 32, 00, 999)
 
@@ -612,7 +612,7 @@ contributors = [
 ]
 """
 @test_broken roundtrip(str) # Printer doesn't handle inline tables in arrays?
-d = parsestring(str)
+d = parse(str)
 @test d["integers"] == [1,2,3]
 @test d["colors"] == ["red", "yellow", "green"]
 @test d["nested_array_of_int"] == [[1,2], [3,4,5]]
@@ -637,7 +637,7 @@ integers3 = [
 ]
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d["integers3"] == [1, 2]
 @test d["integers2"] == [1, 2, 3]
 
@@ -652,7 +652,7 @@ key1 = "some string"
 key2 = "some other string"
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d == Dict("table" => Dict("key2" => "some other string", "key1" => "some string"))
 
 str = """
@@ -660,7 +660,7 @@ str = """
 type.name = "pug"
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d == Dict("dog" => Dict("tater.man" => Dict("type" => Dict("name" => "pug"))))
 
 str = """
@@ -670,7 +670,7 @@ str = """
 [ j . "ʞ" . 'l' ]  # same as [j."ʞ".'l']
 """
 @test_broken roundtrip(str) # Printer removes empty tables right now
-d = parsestring(str)
+d = parse(str)
 @test d == Dict(
   "a" => Dict("b" => Dict("c" => Dict())),
   "d" => Dict("e" => Dict("f" => Dict())),
@@ -688,7 +688,7 @@ str = """
 [x] # defining a super-table afterward is ok
 """
 @test_broken roundtrip(str) # Printer removes empty tables right now
-d = parsestring(str)
+d = parse(str)
 @test d == Dict("x" => Dict("y" => Dict("z" => Dict("w" => Dict()))))
 
 
@@ -703,7 +703,7 @@ a = 3
 b = 2
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d == Dict(
   "x" => Dict(
       "b" => 2,
@@ -721,7 +721,7 @@ apple = "red"
 [fruit]
 orange = "orange"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrDuplicatedKey
 
@@ -734,7 +734,7 @@ apple = "red"
 [fruit.apple]
 texture = "smooth"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrKeyAlreadyHasValue
 
@@ -746,7 +746,7 @@ str = """
 [fruit.orange]
 """
 @test_broken roundtrip(str) # Printer removes empty tables right now
-d = parsestring(str)
+d = parse(str)
 @test d == Dict(
   "fruit" => Dict("apple" => Dict(), "orange" => Dict()),
   "animal" => Dict()
@@ -776,7 +776,7 @@ apple.taste.sweet = true
 smooth = true
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d == Dict(
 "fruit" => Dict("apple" => Dict("color" => "red",
                                 "taste" => Dict("sweet" => true),
@@ -808,14 +808,14 @@ type.name = "pug"
 """
 @test roundtrip(str)
 @test roundtrip(str2)
-@test parsestring(str) == parsestring(str2)
+@test parse(str) == parse(str2)
 
 str = """
 [product]
 type = { name = "Nail" }
 type.edible = false  # INVALID
 """
-err =  tryparsestring(str)
+err =  tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrAddKeyToInlineTable
 
@@ -824,7 +824,7 @@ str = """
 type.name = "Nail"
 type = { edible = false }  # INVALID
 """
-tryparsestring(str) isa ParserError
+tryparse(str) isa ParserError
 @test err isa ParserError
 @test err.type == Internals.ErrAddKeyToInlineTable
 
@@ -844,7 +844,7 @@ sku = 284758393
 color = "gray"
 """
 @test roundtrip(str)
-@test parsestring(str) == Dict(
+@test parse(str) == Dict(
   "products" => [
     Dict("name" => "Hammer",
          "sku" => 738594937),
@@ -876,7 +876,7 @@ str = """
     name = "plantain"
 """
 @test roundtrip(str)
-d = parsestring(str)
+d = parse(str)
 @test d == Dict(
   "fruit" => [
       Dict("name" => "apple",
@@ -902,7 +902,7 @@ str = """
            # an array rather than a table
   name = "apple"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrArrayTreatedAsDictionary
 
@@ -912,7 +912,7 @@ fruit = []
 
 [[fruit]] # Not allowed
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrAddArrayToStaticArray
 
@@ -928,7 +928,7 @@ str = """
   [fruit.variety]
     name = "granny smith"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrDuplicatedKey
 
@@ -945,7 +945,7 @@ str = """
   [[fruit.physical]]
     color = "green"
 """
-err = tryparsestring(str)
+err = tryparse(str)
 @test err isa ParserError
 @test err.type == Internals.ErrArrayTreatedAsDictionary
 
@@ -955,7 +955,7 @@ points = [ { x = 1, y = 2, z = 3 },
            { x = 2, y = 4, z = 8 } ]
 """
 @test roundtrip(str)
-d = tryparsestring(str)
+d = tryparse(str)
 @test d == Dict(
   "points" => [
     Dict("x" => 1, "y" => 2, "z" => 3) ,

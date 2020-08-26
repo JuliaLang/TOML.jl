@@ -1,11 +1,11 @@
 using Test
 using Dates
 
-using TOML: TOML, parsestring, tryparsestring, ParserError, Internals, print
+using TOML: TOML, parse, tryparse, ParserError, Internals, print
 
 function roundtrip(data)
     mktemp() do file, io
-        data_parsed = TOML.parsestring(data)
+        data_parsed = TOML.parse(data)
         TOML.print(io, data_parsed)
         close(io)
         data_roundtrip = TOML.parsefile(file)
@@ -20,4 +20,4 @@ include("invalids.jl")
 include("error_printing.jl")
 include("print.jl")
 
-@inferred TOML.parsestring("foo = 3")
+@inferred TOML.parse("foo = 3")

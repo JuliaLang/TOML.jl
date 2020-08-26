@@ -5,15 +5,11 @@ using Dates
 
 const jsnval = Dict{String,Function}(
     "string" =>identity,
-    "float"  => (s -> parse(Float64, s)),
-    "integer"=> (s -> parse(Int64, s)),
-    "datetime" => (s -> (try
-        parse(DateTime, s, dateformat"yyyy-mm-ddTHH:MM:SSZ")
-        catch e
-            NaN
-        end)),
-    "array"  => (a -> map(jsn2data, a)),
-    "bool"   => (b -> b == "true")
+    "float"    => (s -> Base.parse(Float64, s)),
+    "integer"  => (s -> Base.parse(Int64, s)),
+    "datetime" => (s -> Base.parse(DateTime, s, dateformat"yyyy-mm-ddTHH:MM:SSZ")),
+    "array"    => (a -> map(jsn2data, a)),
+    "bool"     => (b -> b == "true")
 )
 
 function jsn2data(jsn)

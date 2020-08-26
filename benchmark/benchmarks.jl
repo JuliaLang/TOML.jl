@@ -16,10 +16,10 @@ const SUITE = BenchmarkGroup()
 SUITE["arrays"] = BenchmarkGroup()
 
 const homogeneous_array = "foo = [" * join(ones(Int, 10^5), ',') * "]"
-SUITE["arrays"]["homogeneous"] = @benchmarkable TOML.parsestring(homogeneous_array)
+SUITE["arrays"]["homogeneous"] = @benchmarkable TOML.parse(homogeneous_array)
 
 const heterogeneous_array = "foo = [1.0," * join(ones(Int, 10^5), ',') * "]"
-SUITE["arrays"]["heterogeneous"] = @benchmarkable TOML.parsestring(heterogeneous_array)
+SUITE["arrays"]["heterogeneous"] = @benchmarkable TOML.parse(heterogeneous_array)
 
 
 ###########
@@ -29,10 +29,10 @@ SUITE["arrays"]["heterogeneous"] = @benchmarkable TOML.parsestring(heterogeneous
 SUITE["strings"] = BenchmarkGroup()
 
 const long_string = "foo = " * repr(randstring(10^6))
-SUITE["strings"]["long"] = @benchmarkable TOML.parsestring(long_string)
+SUITE["strings"]["long"] = @benchmarkable TOML.parse(long_string)
 
 const short_strings = "foo = [" * join([repr(randstring(3)) for i in 1:10^4], ',') * "]"
-SUITE["strings"]["short"] = @benchmarkable TOML.parsestring(short_strings)
+SUITE["strings"]["short"] = @benchmarkable TOML.parse(short_strings)
 
 
 ###########
@@ -42,10 +42,10 @@ SUITE["strings"]["short"] = @benchmarkable TOML.parsestring(short_strings)
 SUITE["numbers"] = BenchmarkGroup()
 
 const integer_array = "foo = [" * join(rand(Int, 10^5), ',') * "]"
-SUITE["numbers"]["integers"] = @benchmarkable TOML.parsestring(integer_array)
+SUITE["numbers"]["integers"] = @benchmarkable TOML.parse(integer_array)
 
 const float_array = "foo = [" * join(rand(10^5), ',') * "]"
-SUITE["numbers"]["floats"] = @benchmarkable TOML.parsestring(float_array)
+SUITE["numbers"]["floats"] = @benchmarkable TOML.parse(float_array)
 
 
 ###################
@@ -56,7 +56,7 @@ SUITE["array of tables"] = BenchmarkGroup()
 
 const many_empty_array_of_tables =
     repeat("[[foo]] \n", 10^4)
-SUITE["array of tables"]["empty"] = @benchmarkable TOML.parsestring(many_empty_array_of_tables)
+SUITE["array of tables"]["empty"] = @benchmarkable TOML.parse(many_empty_array_of_tables)
 
 
 #################
@@ -66,14 +66,14 @@ SUITE["array of tables"]["empty"] = @benchmarkable TOML.parsestring(many_empty_a
 SUITE["registry"] = BenchmarkGroup()
 
 const registry_toml = read(joinpath(@__DIR__, "files", "Registry.toml"), String)
-SUITE["registry"]["Registry.toml"] = @benchmarkable TOML.parsestring(registry_toml)
+SUITE["registry"]["Registry.toml"] = @benchmarkable TOML.parse(registry_toml)
 
 const compat_toml = read(joinpath(@__DIR__, "files", "Compat.toml"), String)
-SUITE["registry"]["Compat.toml"] = @benchmarkable TOML.parsestring(compat_toml)
+SUITE["registry"]["Compat.toml"] = @benchmarkable TOML.parse(compat_toml)
 
 
 ############
 # Overhead #
 ############
 
-SUITE["parse empty"] = @benchmarkable TOML.parsestring("")
+SUITE["parse empty"] = @benchmarkable TOML.parse("")
