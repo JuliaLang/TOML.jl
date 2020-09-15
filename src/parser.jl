@@ -148,7 +148,7 @@ throw_internal_error(msg) = error("internal TOML parser error: $msg")
 # all the way and have this error be returned to the user
 # if the parse is called with `raise=false`. This macro
 # makes that easier
-@eval macro $(:var"try")(expr)
+@eval macro $(Symbol("try"))(expr)
     return quote
         v = $(esc(expr))
         v isa ParserError && return v
@@ -292,7 +292,7 @@ function point_to_line(str::AbstractString, a::Int, b::Int, context)
     @assert b >= a
     a = thisind(str, a)
     b = thisind(str, b)
-    pos = something(findprev('\n', str, prevind(str, a)), 0) + 1
+    pos = something(findprev(x -> x == '\n', str, prevind(str, a)), 0) + 1
     io1 = IOContext(IOBuffer(), context)
     io2 = IOContext(IOBuffer(), context)
     while true
@@ -651,6 +651,12 @@ end
 # Array #
 #########
 
+function _copy!(a, b)
+    @inbounds for i in eachindex(a, b)
+        a[i] = b[i]
+    end
+end
+
 function push!!(v::Vector, el)
     T = eltype(v)
     if el isa T || typeof(el) === T
@@ -663,7 +669,9 @@ function push!!(v::Vector, el)
             newT = Union{T, typeof(el)}
         end
         new = Array{newT}(undef, length(v))
-        copy!(new, v)
+        if T !== Union{}
+            _copy!(new, v)
+        end
         return push!!(new, el)
     end
 end
@@ -863,7 +871,7 @@ function take_string_or_substring(l, contains_underscore)::SubString
     subs = take_substring(l)
     # Need to pass a AbstractString to `parse` so materialize it in case it
     # contains underscore.
-    return contains_underscore ? SubString(filter(!=('_'), subs)) : subs
+    return contains_underscore ? SubString(filter(x -> x != '_', subs)) : subs
 end
 
 function parse_float(l::Parser, contains_underscore)::Err{Float64}

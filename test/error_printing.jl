@@ -5,6 +5,10 @@ import TOML: tryparsefile
 
 tmp = tempname()
 
+if !isdefined(Base, :contains)
+    contains(x, y) = occursin(y, x)
+end
+
 @testset "error printing" begin
 
 # Special printing for invalid bare key character
