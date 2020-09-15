@@ -5,7 +5,8 @@ os:
   - osx
   - windows
 julia:
-  - 1.5
+  - 1.0
+  - 1
   - nightly
 arch:
   - amd64
@@ -17,13 +18,13 @@ jobs:
       arch: x86
   include:
     - stage: "Benchmarks"
-      julia: 1.5
+      julia: nightly
       os: linux
       script:
         - julia --project=benchmark/ -e 'using Pkg; Pkg.instantiate(); include("benchmark/benchmarks.jl"); run(SUITE)'
       after_success: skip
     - stage: "Documentation"
-      julia: 1.5
+      julia: nightly
       os: linux
       script:
         - julia --project=docs/ -e 'using Pkg; Pkg.instantiate(); include("docs/make.jl")'
