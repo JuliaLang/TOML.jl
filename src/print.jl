@@ -56,10 +56,10 @@ printvalue(f::MbyFunc, io::IO, value::Bool; sorted) =
 printvalue(f::MbyFunc, io::IO, value::Integer; sorted) =
     Base.print(io, Int64(value))  # TOML specifies 64-bit signed long range for integer
 printvalue(f::MbyFunc, io::IO, value::AbstractFloat; sorted) =
-    Base.print(io, isnan(value) ? "nan" : 
+    Base.print(io, isnan(value) ? "nan" :
                    isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                    Float64(value))  # TOML specifies IEEE 754 binary64 for float
-printvalue(f::MbyFunc, io::IO, value::String; sorted) = Base.print(io, "\"", escape_string(value), "\"")
+printvalue(f::MbyFunc, io::IO, value::AbstractString; sorted) = Base.print(io, "\"", escape_string(value), "\"")
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&

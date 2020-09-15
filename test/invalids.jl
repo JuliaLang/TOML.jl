@@ -32,4 +32,3 @@ err = tryparse(str)
 @test err isa ParserError
 
 end
-
