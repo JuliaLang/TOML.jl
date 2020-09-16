@@ -6,4 +6,4 @@ A [TOML v1.0.0](https://github.com/toml-lang/toml) parser for Julia.
 [![codecov](https://codecov.io/gh/KristofferC/TOML.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/KristofferC/TOML.jl)
 [![docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://kristofferc.github.io/TOML.jl/dev/)
 
-*Note:*  This is a Julia standard library and does not need to be explicitly installed.
+*Note:*  This in Julia 1.6+ this is a standard library and does not need to be explicitly installed.
