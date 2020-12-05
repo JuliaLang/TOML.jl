@@ -81,7 +81,7 @@ end
 @test check_valid("newline-lf")
 if Sys.iswindows() &&
     # Sometimes git normalizes the line endings
-    contains(read(joinpath(valid_test_folder, "raw-multiline-string-win.toml"), String), '\r')
+    occursin('\r', read(joinpath(valid_test_folder, "raw-multiline-string-win.toml"), String))
     @test check_valid("raw-multiline-string-win")
 else
     @test check_valid("raw-multiline-string")
