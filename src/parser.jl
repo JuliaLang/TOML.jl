@@ -238,7 +238,7 @@ const err_message = Dict(
     ErrExpectedEqualAfterKey                => "expected equal sign after key",
     ErrNoTrailingDigitAfterDot              => "expected digit after dot",
     ErrOverflowError                        => "overflowed when parsing integer",
-    ErrInvalidUnicodeScalar                 => "invalid uncidode scalar",
+    ErrInvalidUnicodeScalar                 => "invalid Unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
     ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
 )
