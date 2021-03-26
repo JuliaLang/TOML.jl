@@ -71,7 +71,7 @@ julia> data = Dict(
           "age" => [10, 20],
        );
 
-julia> TOML.print(stdout, data)
+julia> TOML.print(data)
 names = ["Julia", "Julio"]
 age = [10, 20]
 
