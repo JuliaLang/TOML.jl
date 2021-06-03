@@ -1,8 +1,43 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Dates
+import Printf
 
 import ..isvalid_barekey_char
+
+const is_printf_bugged = Printf.@sprintf("%.4i", 1) == "1"
+
+function print_toml_escaped(io::IO, s::AbstractString)
+    for c::AbstractChar in s
+        if !isvalid(c)
+            error("TOML print: invalid character $(repr(c)) encountered when printing string")
+        end
+        if c == '\b'
+            Base.print(io, '\\', 'b')
+        elseif c == '\t'
+            Base.print(io, '\\', 't')
+        elseif c == '\n'
+            Base.print(io, '\\', 'n')
+        elseif c == '\f'
+            Base.print(io, '\\', 'f')
+        elseif c == '\r'
+            Base.print(io, '\\', 'r')
+        elseif c == '"'
+            Base.print(io, '\\', '"')
+        elseif c == '\\'
+            Base.print(io, "\\", '\\')
+        elseif Base.iscntrl(c)
+            Base.print(io, "\\u")
+            @static if is_printf_bugged
+                Base.print(io, lpad(UInt32(c), 4, '0'))
+            else
+                Printf.@printf(io, "%.4i", UInt32(c))
+            end
+        else
+            Base.print(io, c)
+        end
+    end
+end
 
 function printkey(io::IO, keys::Vector{String})
     for (i, k) in enumerate(keys)
@@ -12,7 +47,9 @@ function printkey(io::IO, keys::Vector{String})
             Base.print(io, "\"\"")
         elseif any(!isvalid_barekey_char, k)
             # quoted key
-            Base.print(io, "\"", escape_string(k) ,"\"")
+            Base.print(io, "\"")
+            print_toml_escaped(io, k)
+            Base.print(io, "\"")
         else
             Base.print(io, k)
         end
@@ -49,7 +86,11 @@ printvalue(f::MbyFunc, io::IO, value::AbstractFloat; _...) =
     Base.print(io, isnan(value) ? "nan" :
                    isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
                    Float64(value))  # TOML specifies IEEE 754 binary64 for float
-printvalue(f::MbyFunc, io::IO, value::AbstractString; _...) = Base.print(io, "\"", escape_string(value), "\"")
+function printvalue(f::MbyFunc, io::IO, value::AbstractString; _...)
+    Base.print(io, "\"")
+    print_toml_escaped(io, value)
+    Base.print(io, "\"")
+end
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&
