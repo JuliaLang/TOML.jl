@@ -26,15 +26,15 @@ function printvalue(f::MbyFunc, io::IO, value::AbstractVector; sorted=false, by=
     for (i, x) in enumerate(value)
         i != 1 && Base.print(io, ", ")
         if isa(x, AbstractDict)
-            _print(f, io, x; sorted, by)
+            _print(f, io, x; sorted=sorted, by=by)
         else
-            printvalue(f, io, x; sorted, by)
+            printvalue(f, io, x; sorted=sorted, by=by)
         end
     end
     Base.print(io, "]")
 end
 printvalue(f::MbyFunc, io::IO, value::AbstractDict; sorted=false, by=identity) =
-    _print(f, io, value; sorted, by)
+    _print(f, io, value; sorted=sorted, by=by)
 printvalue(f::MbyFunc, io::IO, value::Dates.DateTime; _...) =
     Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
 printvalue(f::MbyFunc, io::IO, value::Dates.Time; _...) =
@@ -65,7 +65,7 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
 )
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys); by)
+        akeys = sort!(collect(akeys); by=by)
     end
 
     # First print non-tabular entries
@@ -83,12 +83,12 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
             value = toml_value
         end
         if is_tabular(value)
-            _print(f, io, Dict(key => value); indent, first_block, sorted, by)
+            _print(f, io, Dict(key => value); indent=indent, first_block=first_block, sorted=sorted, by=by)
         else
             Base.print(io, ' '^4max(0,indent-1))
             printkey(io, [String(key)])
             Base.print(io, " = ") # print separator
-            printvalue(f, io, value; sorted, by)
+            printvalue(f, io, value; sorted=sorted, by=by)
             Base.print(io, "\n")  # new line?
         end
         first_block = false
@@ -109,7 +109,7 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]\n")
             end
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            Base.invokelatest(_print, f, io, value, ks; indent = indent + header, first_block = header, sorted, by)
+            Base.invokelatest(_print, f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
             pop!(ks)
         elseif is_array_of_tables(value)
             # print array of tables
@@ -123,15 +123,15 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]]\n")
                 # TODO, nicer error here
                 !isa(v, AbstractDict) && error("array should contain only tables")
-                Base.invokelatest(_print, f, io, v, ks; indent = indent + 1, sorted, by)
+                Base.invokelatest(_print, f, io, v, ks; indent = indent + 1, sorted=sorted, by=by)
             end
             pop!(ks)
         end
     end
 end
 
-print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(f, io, a; sorted, by)
-print(f::MbyFunc, a::AbstractDict; sorted::Bool=false, by=identity) = print(f, stdout, a; sorted, by)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(nothing, io, a; sorted, by)
-print(a::AbstractDict; sorted::Bool=false, by=identity) = print(nothing, stdout, a; sorted, by)
+print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(f, io, a; sorted=sorted, by=by)
+print(f::MbyFunc, a::AbstractDict; sorted::Bool=false, by=identity) = print(f, stdout, a; sorted=sorted, by=by)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(nothing, io, a; sorted=sorted, by=by)
+print(a::AbstractDict; sorted::Bool=false, by=identity) = print(nothing, stdout, a; sorted=sorted, by=by)
 
