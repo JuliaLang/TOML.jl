@@ -41,7 +41,8 @@ jobs:
             ${{ runner.os }}-test-
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
-      - uses: julia-actions/julia-runtest@8ff46c64862da899d55166fdec94a39ee3249de0 # v1.5.1
+      # - uses: julia-actions/julia-runtest@8ff46c64862da899d55166fdec94a39ee3249de0 # v1.5.1
+      - run: julia --color=yes --check-bounds=yes --inline=yes --depwarn=yes --project=@. -e 'using Pkg; Pkg.test(coverage=true)'
       - run: ls src
       - run: ls src/*.cov
       - run: cat src/*.cov
