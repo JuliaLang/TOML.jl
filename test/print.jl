@@ -62,6 +62,7 @@ end
 @testset "special characters" begin
     s = """
     "\U1f355 \0 \x0 \x1 \t \b" = "\U1f355 \0 \x0 \x1 \t \b"
+    "\x7f" = "\x7f"
     """
     @test roundtrip(s)
 

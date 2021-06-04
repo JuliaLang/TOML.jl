@@ -1,11 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 import Dates
-import Printf
 
 import ..isvalid_barekey_char
-
-const is_printf_bugged = Printf.@sprintf("%.4i", 1) == "1"
 
 function print_toml_escaped(io::IO, s::AbstractString)
     for c::AbstractChar in s
@@ -28,11 +25,7 @@ function print_toml_escaped(io::IO, s::AbstractString)
             Base.print(io, "\\", '\\')
         elseif Base.iscntrl(c)
             Base.print(io, "\\u")
-            @static if is_printf_bugged
-                Base.print(io, lpad(UInt32(c), 4, '0'))
-            else
-                Printf.@printf(io, "%.4i", UInt32(c))
-            end
+            Base.print(io, string(UInt32(c), base=16, pad=4))
         else
             Base.print(io, c)
         end
