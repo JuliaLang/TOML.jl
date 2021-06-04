@@ -44,7 +44,7 @@ jobs:
       # - uses: julia-actions/julia-runtest@8ff46c64862da899d55166fdec94a39ee3249de0 # v1.5.1
       # - run: julia --color=yes --check-bounds=yes --inline=yes --depwarn=yes --project=@. -e 'using Pkg; Pkg.test(coverage=true)'
       # - run: julia --project=@. -e 'using Pkg; Pkg.test(coverage=true)'
-      - run: julia --project=@. test/runtests.jl
+      - run: julia --project=@. --code-coverage=user test/runtests.jl
       - run: ls src
       - run: ls src/*.cov
       - run: cat src/*.cov
