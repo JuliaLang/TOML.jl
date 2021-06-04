@@ -42,7 +42,6 @@ jobs:
             ${{ runner.os }}-
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
-      - run: ls
       - run: ls src
       # - uses: julia-actions/julia-processcoverage@v1
       - run: |
@@ -54,8 +53,6 @@ jobs:
           pf = process_folder()
           LCOV.writefile("lcov.info", pf)
         shell: julia --color=yes {0}
-      - run: ls
-      - run: ls src
       - run: ls lcov.info
       - uses: actions/upload-artifact@v2
         with:
