@@ -46,6 +46,7 @@ jobs:
       - uses: codecov/codecov-action@v1
         with:
           file: lcov.info
+      - run: cat lcov.info
   benchmarks:
     name: Benchmarks
     runs-on: ubuntu-latest
