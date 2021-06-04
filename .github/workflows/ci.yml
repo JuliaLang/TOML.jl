@@ -43,8 +43,7 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - run: tree
-      - run: ls src/parser.jl.*.cov
-      - run: cat src/parser.jl.*.cov
+      # - uses: julia-actions/julia-processcoverage@v1
       - run: |
           using Pkg
           Pkg.activate("coveragetempenv", shared=true)
@@ -56,7 +55,10 @@ jobs:
         shell: julia --color=yes {0}
       - run: tree
       - run: ls lcov.info
-      - run: cat lcov.info
+      - uses: actions/upload-artifact@v2
+        with:
+          name: lcov.info
+          path: lcov.info
       - uses: codecov/codecov-action@v1
         with:
           file: lcov.info
