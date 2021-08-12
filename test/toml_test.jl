@@ -48,7 +48,6 @@ failures = [
     "testfiles/valid/datetime/datetime.toml",
     "testfiles/valid/datetime/milliseconds.toml",
     "testfiles/valid/datetime/timezone.toml",
-    "testfiles/valid/float/zero.toml",
     "testfiles/valid/string/multiline-quotes.toml",
 ]
 
