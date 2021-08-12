@@ -44,9 +44,7 @@ end
 @testset "valid" begin
 
 failures = [
-    "testfiles/valid/spec-example-1-compact.toml",
     "testfiles/valid/spec-example-1.toml",
-    "testfiles/valid/comment/tricky.toml",
     "testfiles/valid/datetime/datetime.toml",
     "testfiles/valid/datetime/milliseconds.toml",
     "testfiles/valid/datetime/timezone.toml",
