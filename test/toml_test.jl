@@ -112,13 +112,6 @@ failures = [
     "testfiles/invalid/control/string-us.toml",
     "testfiles/invalid/encoding/bad-utf8-in-comment.toml",
     "testfiles/invalid/encoding/bad-utf8-in-string.toml",
-    "testfiles/invalid/integer/negative-bin.toml",
-    "testfiles/invalid/integer/negative-hex.toml",
-    "testfiles/invalid/integer/negative-hex.toml",
-    "testfiles/invalid/integer/negative-oct.toml",
-    "testfiles/invalid/integer/positive-bin.toml",
-    "testfiles/invalid/integer/positive-hex.toml",
-    "testfiles/invalid/integer/positive-oct.toml",
     "testfiles/invalid/key/multiline.toml",
 ]
 
