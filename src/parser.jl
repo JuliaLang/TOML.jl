@@ -463,7 +463,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         l.active_table = l.root
         @try parse_table(l)
         skip_ws_comment(l)
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
@@ -471,7 +471,7 @@ function parse_toplevel(l::Parser)::Err{Nothing}
         @try parse_entry(l, l.active_table)
         skip_ws_comment(l)
         # SPEC: "There must be a newline (or EOF) after a key/value pair."
-        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == EOF_CHAR)
+        if !(peek(l) == '\n' || peek(l) == '\r' || peek(l) == '#' || peek(l) == EOF_CHAR)
             c = eat_char(l)
             return ParserError(ErrExpectedNewLineKeyValue)
         end
