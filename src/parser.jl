@@ -198,6 +198,7 @@ end
     ErrLeadingDot
     ErrNoTrailingDigitAfterDot
     ErrTrailingUnderscoreNumber
+    ErrSignInNonBase10Number
 
     # DateTime
     ErrParsingDateTime
@@ -240,7 +241,8 @@ const err_message = Dict(
     ErrOverflowError                        => "overflowed when parsing integer",
     ErrInvalidUnicodeScalar                 => "invalid Unicode scalar",
     ErrInvalidEscapeCharacter               => "invalid escape character",
-    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value"
+    ErrUnexpectedEofExpectedValue           => "unexpected end of file, expected a value",
+    ErrSignInNonBase10Number                => "number not in base 10 is not allowed to have a sign",
 )
 
 for err in instances(ErrorType)
@@ -782,9 +784,11 @@ function parse_number_or_date_start(l::Parser)
 
     set_marker!(l)
     sgn = 1
+    parsed_sign = false
     if accept(l, '+')
-        # do nothing
+        parsed_sign = true
     elseif accept(l, '-')
+        parsed_sign = true
         sgn = -1
     end
     if accept(l, 'i')
@@ -804,12 +808,15 @@ function parse_number_or_date_start(l::Parser)
         if ok_end_value(peek(l))
             return Int64(0)
         elseif accept(l, 'x')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, 'o')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, 'b')
+            parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
             ate && return parse_int(l, contains_underscore)
         elseif accept(l, isdigit)
