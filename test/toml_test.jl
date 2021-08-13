@@ -49,6 +49,7 @@ failures = [
     "testfiles/valid/datetime/milliseconds.toml",
     "testfiles/valid/datetime/timezone.toml",
     "testfiles/valid/string/multiline-quotes.toml",
+    "testfiles/valid/string/multiline.toml",
 ]
 
 valid_test_folder = joinpath(@__DIR__, "testfiles", "valid")
