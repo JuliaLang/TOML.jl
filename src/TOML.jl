@@ -101,7 +101,7 @@ Writes `data` as TOML syntax to the stream `io`. The keyword argument `sort`
 sorts the output on the keys of the tables with the top level tables are
 sorted according to the keyword argument `by`.
 
-The following data types are supported: `AbstractDict`, `Integer`, `AbstractFloat`, `Bool`,
+The following data types are supported: `AbstractDict`, `AbstractVector`, `AbstractString`, `Integer`, `AbstractFloat`, `Bool`,
 `Dates.DateTime`, `Dates.Time`, `Dates.Date`. Note that the integers and floats
 need to be convertible to `Float64` and `Int64` respectively. For other data types,
 pass the function `to_toml` that takes the data types and returns a value of a
