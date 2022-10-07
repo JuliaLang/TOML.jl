@@ -1,1 +1,0 @@
-Dict{String, Any}("strings-and-ints" => Any[Dict{String, Any}("value" => "hi", "type" => "string"), Dict{String, Any}("value" => "42", "type" => "integer")])

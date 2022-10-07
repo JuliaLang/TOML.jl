@@ -1,1 +1,0 @@
-Dict{String, Any}("tbl_multiline" => Dict{String, Any}("c" => Dict{String, Any}("value" => "and yet\nanother line", "type" => "string"), "b" => Dict{String, Any}("value" => "multiline\n", "type" => "string"), "a" => Dict{String, Any}("value" => "1", "type" => "integer"), "d" => Dict{String, Any}("value" => "4", "type" => "integer")))

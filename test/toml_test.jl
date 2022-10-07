@@ -3,6 +3,8 @@ using TOML
 using Test
 using Dates
 
+testfiles = get_data()
+
 const jsnval = Dict{String,Function}(
     "string" =>identity,
     "float"    => (s -> Base.parse(Float64, s)),
@@ -44,24 +46,28 @@ end
 @testset "valid" begin
 
 failures = [
-    "testfiles/valid/spec-example-1.toml",
-    "testfiles/valid/datetime/datetime.toml",
-    "testfiles/valid/datetime/milliseconds.toml",
-    "testfiles/valid/datetime/timezone.toml",
-    "testfiles/valid/string/multiline-quotes.toml",
-    "testfiles/valid/string/multiline.toml",
+    "valid/spec-example-1.toml",
+    "valid/spec-example-1-compact.toml",
+    "valid/datetime/datetime.toml",
+    "valid/comment/everywhere.toml",
+    "valid/datetime/milliseconds.toml",
+    "valid/datetime/timezone.toml",
+    "valid/string/multiline-quotes.toml",
+    "valid/string/multiline.toml",
+    "valid/float/zero.toml", # this one has a buggy .json file
+    "valid/string/escape-esc.toml",
 ]
 
-valid_test_folder = joinpath(@__DIR__, "testfiles", "valid")
+valid_test_folder = joinpath(testfiles, "valid")
 for (root, dirs, files) in walkdir(valid_test_folder)
     for f in files
         if endswith(f, ".toml")
             file = joinpath(root, f)
-            rel = relpath(file, @__DIR__)
+            rel = relpath(file, testfiles)
             if Sys.iswindows()
                 rel = replace(rel, '\\' => '/')
             end
-            v = check_valid(splitext(file)[1]) 
+            v = check_valid(splitext(file)[1])
             if rel in failures
                 @test_broken v
             else
@@ -90,38 +96,45 @@ end
 @testset "invalid" begin
 
 failures = [
-    "testfiles/invalid/control/comment-del.toml",
-    "testfiles/invalid/control/comment-lf.toml",
-    "testfiles/invalid/control/comment-null.toml",
-    "testfiles/invalid/control/comment-us.toml",
-    "testfiles/invalid/control/multi-del.toml",
-    "testfiles/invalid/control/multi-lf.toml",
-    "testfiles/invalid/control/multi-null.toml",
-    "testfiles/invalid/control/multi-us.toml",
-    "testfiles/invalid/control/rawmulti-del.toml",
-    "testfiles/invalid/control/rawmulti-lf.toml",
-    "testfiles/invalid/control/rawmulti-null.toml",
-    "testfiles/invalid/control/rawmulti-us.toml",
-    "testfiles/invalid/control/rawstring-del.toml",
-    "testfiles/invalid/control/rawstring-lf.toml",
-    "testfiles/invalid/control/rawstring-null.toml",
-    "testfiles/invalid/control/rawstring-us.toml",
-    "testfiles/invalid/control/string-bs.toml",
-    "testfiles/invalid/control/string-del.toml",
-    "testfiles/invalid/control/string-lf.toml",
-    "testfiles/invalid/control/string-null.toml",
-    "testfiles/invalid/control/string-us.toml",
-    "testfiles/invalid/encoding/bad-utf8-in-comment.toml",
-    "testfiles/invalid/encoding/bad-utf8-in-string.toml",
-    "testfiles/invalid/key/multiline.toml",
+    "invalid/control/bare-cr.toml",
+    "invalid/control/comment-del.toml",
+    "invalid/control/comment-lf.toml",
+    "invalid/control/comment-null.toml",
+    "invalid/control/comment-us.toml",
+    "invalid/control/comment-cr.toml",
+    "invalid/datetime/time-no-leads.toml",
+    "invalid/control/multi-del.toml",
+    "invalid/control/multi-lf.toml",
+    "invalid/control/multi-null.toml",
+    "invalid/control/multi-us.toml",
+    "invalid/control/rawmulti-del.toml",
+    "invalid/control/rawmulti-lf.toml",
+    "invalid/control/rawmulti-null.toml",
+    "invalid/control/rawmulti-us.toml",
+    "invalid/control/rawstring-del.toml",
+    "invalid/control/rawstring-lf.toml",
+    "invalid/control/rawstring-null.toml",
+    "invalid/control/rawstring-us.toml",
+    "invalid/control/string-bs.toml",
+    "invalid/control/string-del.toml",
+    "invalid/control/string-lf.toml",
+    "invalid/control/string-null.toml",
+    "invalid/control/string-us.toml",
+    "invalid/encoding/bad-utf8-in-comment.toml",
+    "invalid/encoding/bad-utf8-in-string.toml",
+    "invalid/inline-table/overwrite.toml",
+    "invalid/key/multiline.toml",
+    "invalid/table/append-with-dotted-keys-2.toml",
+    "invalid/table/duplicate-key-dotted-table.toml",
+    "invalid/table/duplicate-key-dotted-table2.toml",
 ]
 
-invalid_test_folder = joinpath(@__DIR__, "testfiles", "invalid")
+invalid_test_folder = joinpath(testfiles, "invalid")
 for (root, dirs, files) in walkdir(invalid_test_folder)
     for f in files
         if endswith(f, ".toml")
             file = joinpath(root, f)
-            rel = relpath(file, @__DIR__)
+            rel = relpath(file, testfiles)
             if Sys.iswindows()
                 rel = replace(rel, '\\' => '/')
             end
