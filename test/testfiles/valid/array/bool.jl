@@ -1,1 +1,0 @@
-Dict{String, Any}("a" => Any[Dict{String, Any}("value" => "true", "type" => "bool"), Dict{String, Any}("value" => "false", "type" => "bool")])

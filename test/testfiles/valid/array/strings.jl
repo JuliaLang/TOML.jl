@@ -1,1 +1,0 @@
-Dict{String, Any}("string_array" => Any[Dict{String, Any}("value" => "all", "type" => "string"), Dict{String, Any}("value" => "strings", "type" => "string"), Dict{String, Any}("value" => "are the same", "type" => "string"), Dict{String, Any}("value" => "type", "type" => "string")])

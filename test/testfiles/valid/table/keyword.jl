@@ -1,1 +1,0 @@
-Dict{String, Any}("true" => Dict{String, Any}(), "false" => Dict{String, Any}(), "nan" => Dict{String, Any}(), "inf" => Dict{String, Any}())
