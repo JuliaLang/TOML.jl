@@ -58,10 +58,12 @@ failures = [
     "valid/string/escape-esc.toml",
 ]
 
+n_files_valid = 0
 valid_test_folder = joinpath(testfiles, "valid")
 for (root, dirs, files) in walkdir(valid_test_folder)
     for f in files
         if endswith(f, ".toml")
+            n_files_valid += 1
             file = joinpath(root, f)
             rel = relpath(file, testfiles)
             if Sys.iswindows()
@@ -76,6 +78,7 @@ for (root, dirs, files) in walkdir(valid_test_folder)
         end
     end
 end
+@test n_files_valid >= 100
 
 end # testset
 
@@ -122,17 +125,18 @@ failures = [
     "invalid/control/string-us.toml",
     "invalid/encoding/bad-utf8-in-comment.toml",
     "invalid/encoding/bad-utf8-in-string.toml",
-    "invalid/inline-table/overwrite.toml",
     "invalid/key/multiline.toml",
     "invalid/table/append-with-dotted-keys-2.toml",
     "invalid/table/duplicate-key-dotted-table.toml",
     "invalid/table/duplicate-key-dotted-table2.toml",
 ]
 
+n_invalid = 0
 invalid_test_folder = joinpath(testfiles, "invalid")
 for (root, dirs, files) in walkdir(invalid_test_folder)
     for f in files
         if endswith(f, ".toml")
+            n_invalid += 1
             file = joinpath(root, f)
             rel = relpath(file, testfiles)
             if Sys.iswindows()
@@ -147,5 +151,6 @@ for (root, dirs, files) in walkdir(invalid_test_folder)
         end
     end
 end
+@test n_invalid > 50
 
 end # testset

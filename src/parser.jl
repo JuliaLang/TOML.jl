@@ -190,6 +190,7 @@ end
     # Inline tables
     ErrExpectedCommaBetweenItemsInlineTable
     ErrTrailingCommaInlineTable
+    ErrInlineTableRedefine
 
     # Numbers
     ErrUnderscoreNotSurroundedByDigits
@@ -226,6 +227,7 @@ const err_message = Dict(
     ErrUnexpectedEndString                  => "string literal ended unexpectedly",
     ErrExpectedEndOfTable                   => "expected end of table ']'",
     ErrAddKeyToInlineTable                  => "tried to add a new key to an inline table",
+    ErrInlineTableRedefine                  => "inline table overwrote key from other table",
     ErrArrayTreatedAsDictionary             => "tried to add a key to an array",
     ErrAddArrayToStaticArray                => "tried to append to a statically defined array",
     ErrGenericValueError                    => "failed to parse value",
@@ -560,6 +562,10 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
 
     skip_ws(l)
     value = @try parse_value(l)
+    # Not allowed to overwrite a value with an inline dict
+    if value isa Dict && haskey(d, last_key_part)
+        return ParserError(ErrInlineTableRedefine)
+    end
     # TODO: Performance, hashing `last_key_part` again here
     d[last_key_part] = value
     return
