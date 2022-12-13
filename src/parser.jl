@@ -903,7 +903,7 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     return v
 end
 
-function parse_uint(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+function parse_uint(l::Parser, contains_underscore, base=nothing)::Err{UInt64}
     s = take_string_or_substring(l, contains_underscore)
     v = try
         Base.parse(UInt64, s; base=base)
