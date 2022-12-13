@@ -805,13 +805,13 @@ function parse_number_or_date_start(l::Parser)
             return Int64(0)
         elseif accept(l, 'x')
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_uint(l, contains_underscore)
         elseif accept(l, 'o')
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_uint(l, contains_underscore)
         elseif accept(l, 'b')
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_uint(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
         elseif peek(l) !== '.'
@@ -885,6 +885,17 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
     s = take_string_or_substring(l, contains_underscore)
     v = try
         Base.parse(Int64, s; base=base)
+    catch e
+        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+    end
+    return v
+end
+
+function parse_uint(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+    s = take_string_or_substring(l, contains_underscore)
+    v = try
+        Base.parse(UInt64, s; base=base)
     catch e
         e isa Base.OverflowError && return(ParserError(ErrOverflowError))
         error("internal parser error: did not correctly discredit $(repr(s)) as an int")

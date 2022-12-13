@@ -7,6 +7,7 @@ const jsnval = Dict{String,Function}(
     "string" =>identity,
     "float"    => (s -> Base.parse(Float64, s)),
     "integer"  => (s -> Base.parse(Int64, s)),
+    "unsigned" => (s -> Base.parse(UInt64, s)),
     "datetime" => (s -> Base.parse(DateTime, s, dateformat"yyyy-mm-ddTHH:MM:SSZ")),
     "array"    => (a -> map(jsn2data, a)),
     "bool"     => (b -> b == "true")
@@ -66,6 +67,7 @@ end
 @test check_valid("implicit-groups")
 @test check_valid("inline-table-array")
 @test check_valid("inline-table")
+@test check_valid("integer-unsigned")
 @test check_valid("integer-underscore")
 @test check_valid("integer")
 @test check_valid("key-equals-nospace")
