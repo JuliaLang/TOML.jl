@@ -158,19 +158,19 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
             value = to_toml_value(f, value)
         end
         if is_table(value)
+            # print table
+            first_block || println(io)
+            first_block = false
             push!(ks, String(key))
             header = isempty(value) || !all(is_tabular(v) for v in values(value))::Bool
             if header
-                # print table
-                first_block || println(io)
-                first_block = false
                 Base.print(io, ' '^4indent)
                 Base.print(io,"[")
                 printkey(io, ks)
                 Base.print(io,"]\n")
             end
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            Base.invokelatest(print_table, f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
+            Base.invokelatest(print_table, f, io, value, ks; indent = indent + header, first_block = true, sorted=sorted, by=by)
             pop!(ks)
         elseif is_array_of_tables(value)
             # print array of tables

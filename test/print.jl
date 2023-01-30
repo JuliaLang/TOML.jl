@@ -109,3 +109,12 @@ a = 2
 c = 1.345
 d = "hello"
 """
+
+@test toml_str(Dict("a" => Dict("b" => Dict("c" => 1)), "d" => Dict("e" => 2))) ==
+"""
+[a.b]
+c = 1
+
+[d]
+e = 2
+"""
