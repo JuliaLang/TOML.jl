@@ -23,6 +23,9 @@ DateTime(y, m, d, h, mi, s, ms) =
 
 const EOF_CHAR = typemax(Char)
 
+# Type of TOMLDict
+const TD = AbstractDict{String, Any}
+# Default TOMLDict
 const TOMLDict  = Dict{String, Any}
 
 ##########
@@ -47,7 +50,7 @@ mutable struct Parser
     marker::Int
 
     # The current table that `key = value` entries are inserted into
-    active_table::TOMLDict
+    active_table::TD
 
     # As we parse dotted keys we store each part of the key in this cache
     # A future improvement would be to also store the spans of the keys
@@ -61,17 +64,17 @@ mutable struct Parser
 
     # We need to keep track of those tables / arrays that are defined
     # inline since we are not allowed to add keys to those
-    inline_tables::IdSet{TOMLDict}
+    inline_tables::IdSet{TD}
     static_arrays::IdSet{Any}
 
     # [a.b.c.d] doesn't "define" the table [a]
     # so keys can later be added to [a], therefore
     # we need to keep track of what tables are
     # actually defined
-    defined_tables::IdSet{TOMLDict}
+    defined_tables::IdSet{TD}
 
     # The table we will finally return to the user
-    root::TOMLDict
+    root::TD
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
@@ -82,8 +85,7 @@ end
 
 const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 
-function Parser(str::String; filepath=nothing)
-    root = TOMLDict()
+function Parser(str::String; filepath=nothing, root::TD=TOMLDict())
     l = Parser(
             str,                  # str
             EOF_CHAR,             # current_char
@@ -95,9 +97,9 @@ function Parser(str::String; filepath=nothing)
             root,                 # active_table
             String[],             # dotted_keys
             UnitRange{Int}[],     # chunks
-            IdSet{TOMLDict}(),    # inline_tables
+            IdSet{TD}(),    # inline_tables
             IdSet{Any}(),   # static_arrays
-            IdSet{TOMLDict}(),    # defined_tables
+            IdSet{TD}(),    # defined_tables
             root,
             filepath,
             get(Base.loaded_modules, DATES_PKGID, nothing),
@@ -118,7 +120,7 @@ end
 Parser() = Parser("")
 Parser(io::IO) = Parser(read(io, String))
 
-function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing, root::TD=TOMLDict())
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
@@ -126,7 +128,7 @@ function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothin
     p.column = 0
     p.line = 1
     p.marker = 0
-    p.root = TOMLDict()
+    p.root = root 
     p.active_table = p.root
     empty!(p.dotted_keys)
     empty!(p.chunks)
@@ -265,7 +267,7 @@ mutable struct ParserError <: Exception
     line      ::Union{Int,      Nothing}
     column    ::Union{Int,      Nothing}
     pos       ::Union{Int,      Nothing} # position of parser when
-    table     ::Union{TOMLDict, Nothing} # result parsed until error
+    table     ::Union{TD, Nothing} # result parsed until error
 end
 ParserError(type, data) = ParserError(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
 ParserError(type) = ParserError(type, nothing)
@@ -436,13 +438,13 @@ take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
 
 # Driver, keeps parsing toplevel until we either get
 # a `ParserError` or eof.
-function parse(l::Parser)::TOMLDict
+function parse(l::Parser)::TD
     v = tryparse(l)
     v isa ParserError && throw(v)
     return v
 end
 
-function tryparse(l::Parser)::Err{TOMLDict}
+function tryparse(l::Parser)::Err{TD}
     while true
         skip_ws_nl(l)
         peek(l) == EOF_CHAR && break
@@ -482,10 +484,10 @@ function parse_toplevel(l::Parser)::Err{Nothing}
     end
 end
 
-function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, check=true)::Err{TOMLDict}
+function recurse_dict!(l::Parser, d::TD, dotted_keys::AbstractVector{String}, check=true)::Err{TD}
     for i in 1:length(dotted_keys)
         key = dotted_keys[i]
-        d = get!(TOMLDict, d, key)
+        d = get!(typeof(l.root), d, key)
         if d isa Vector
             d = d[end]
         end
@@ -495,9 +497,9 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
 end
 
 function check_allowed_add_key(l::Parser, d, check_defined=true)::Err{Nothing}
-    if !(d isa Dict)
+    if !(d isa AbstractDict)
         return ParserError(ErrKeyAlreadyHasValue)
-    elseif d isa Dict && d in l.inline_tables
+    elseif d isa AbstractDict && d in l.inline_tables
         return ParserError(ErrAddKeyToInlineTable)
     elseif check_defined && d in l.defined_tables
         return ParserError(ErrDuplicatedKey)
@@ -536,7 +538,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     else
         return ParserError(ErrArrayTreatedAsDictionary)
     end
-    d_new = TOMLDict()
+    d_new = typeof(l.root)()
     push!(old, d_new)
     push!(l.defined_tables, d_new)
     l.active_table = d_new
@@ -563,7 +565,7 @@ function parse_entry(l::Parser, d)::Union{Nothing, ParserError}
     skip_ws(l)
     value = @try parse_value(l)
     # Not allowed to overwrite a value with an inline dict
-    if value isa Dict && haskey(d, last_key_part)
+    if value isa AbstractDict && haskey(d, last_key_part)
         return ParserError(ErrInlineTableRedefine)
     end
     # TODO: Performance, hashing `last_key_part` again here
@@ -710,8 +712,8 @@ end
 # Inline table #
 ################
 
-function parse_inline_table(l::Parser)::Err{TOMLDict}
-    dict = TOMLDict()
+function parse_inline_table(l::Parser)::Err{TD}
+    dict = typeof(l.root)()
     push!(l.inline_tables, dict)
     skip_ws(l)
     accept(l, '}') && return dict
