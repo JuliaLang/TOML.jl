@@ -438,7 +438,7 @@ take_substring(l::Parser) = SubString(l.str, l.marker:(l.prevpos-1))
 
 # Driver, keeps parsing toplevel until we either get
 # a `ParserError` or eof.
-function parse(l::Parser)::TD
+function parse(l::Parser)
     v = tryparse(l)
     v isa ParserError && throw(v)
     return v
