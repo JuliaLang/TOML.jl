@@ -267,8 +267,8 @@ mutable struct ParserError{DictType <: AbstractDictType} <: Exception
     pos       ::Union{Int,      Nothing} # position of parser when
     table     ::Union{DictType, Nothing} # result parsed until error
 end
-ParserError(type, data) = ParserError(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
-ParserError(type) = ParserError(type, nothing)
+ParserError{DictType}(type, data) where {DictType <: AbstractDictType} = ParserError{DictType}(type, data, nothing, nothing, nothing, nothing, nothing, nothing)
+ParserError{DictType}(type) where {DictType <: AbstractDictType} = ParserError{DictType}(type, nothing)
 # Defining these below can be useful when debugging code that erroneously returns a
 # ParserError because you get a stacktrace to where the ParserError was created
 #ParserError(type) = error(type)
