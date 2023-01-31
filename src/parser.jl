@@ -892,7 +892,7 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+function parse_int(l::Parser{DictType}, contains_underscore, base=nothing)::Err{Int64} where {DictType <: AbstractDictType}
     s = take_string_or_substring(l, contains_underscore)
     v = try
         Base.parse(Int64, s; base=base)
