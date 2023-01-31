@@ -944,7 +944,7 @@ function parse_datetime(l::Parser{DictType}) where {DictType <: AbstractDictType
     year in 0:9999 || return ParserError{DictType}(ErrParsingDateTime)
 
     # Month
-    accept(l, '-') || return ParserError{DictType(ErrParsingDateTime)
+    accept(l, '-') || return ParserError{DictType}(ErrParsingDateTime)
     set_marker!(l)
     @try accept_two(l, isdigit)
     month = parse_int(l, false)
