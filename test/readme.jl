@@ -535,13 +535,13 @@ str = "odt1 = 1979-05-27T07:32:00.99999Z"
 # Julia doesn't support offset datetimes
 str = "odt2 = 1979-05-27T00:32:00-07:00"
 err = tryparse(str)
-@test_broken err isa Dict
+@test_broken err isa AbstractDict
 @test err isa Internals.ParserError
 @test err.type == Internals.ErrOffsetDateNotSupported
 
 str = "odt3 = 1979-05-27T00:32:00.999999-07:00"
 err = tryparse(str)
-@test_broken err isa Dict
+@test_broken err isa AbstractDict
 @test err isa Internals.ParserError
 @test err.type == Internals.ErrOffsetDateNotSupported
 
