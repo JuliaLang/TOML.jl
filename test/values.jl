@@ -1,6 +1,5 @@
 using Test
 using TOML
-using TOML: Internals
 
 function testval(s, v)
     f = "foo = $s"
@@ -15,23 +14,23 @@ function failval(s, v)
 end
 
 @testset "Numbers" begin
-    @test failval("00"                   , Internals.ErrParsingDateTime)
-    @test failval("-00"                  , Internals.ErrParsingDateTime)
-    @test failval("+00"                  , Internals.ErrParsingDateTime)
-    @test failval("00.0"                 , Internals.ErrParsingDateTime)
-    @test failval("-00.0"                , Internals.ErrParsingDateTime)
-    @test failval("+00.0"                , Internals.ErrParsingDateTime)
-    @test failval("9223372036854775808"  , Internals.ErrOverflowError)
-    @test failval("-9223372036854775809" , Internals.ErrOverflowError)
+    @test failval("00"                   , TOML.Internals.ErrParsingDateTime)
+    @test failval("-00"                  , TOML.Internals.ErrParsingDateTime)
+    @test failval("+00"                  , TOML.Internals.ErrParsingDateTime)
+    @test failval("00.0"                 , TOML.Internals.ErrParsingDateTime)
+    @test failval("-00.0"                , TOML.Internals.ErrParsingDateTime)
+    @test failval("+00.0"                , TOML.Internals.ErrParsingDateTime)
+    @test failval("9223372036854775808"  , TOML.Internals.ErrOverflowError)
+    @test failval("-9223372036854775809" , TOML.Internals.ErrOverflowError)
 
-    @test failval("0."        , Internals.ErrNoTrailingDigitAfterDot)
-    @test failval("0.e"       , Internals.ErrNoTrailingDigitAfterDot)
-    @test failval("0.E"       , Internals.ErrNoTrailingDigitAfterDot)
-    @test failval("0.0E"      , Internals.ErrGenericValueError)
-    @test failval("0.0e"      , Internals.ErrGenericValueError)
-    @test failval("0.0e-"     , Internals.ErrGenericValueError)
-    @test failval("0.0e+"     , Internals.ErrGenericValueError)
-    @test_broken failval("0.0e+00" , Internals.ErrGenericValueError)
+    @test failval("0."        , TOML.Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.e"       , TOML.Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.E"       , TOML.Internals.ErrNoTrailingDigitAfterDot)
+    @test failval("0.0E"      , TOML.Internals.ErrGenericValueError)
+    @test failval("0.0e"      , TOML.Internals.ErrGenericValueError)
+    @test failval("0.0e-"     , TOML.Internals.ErrGenericValueError)
+    @test failval("0.0e+"     , TOML.Internals.ErrGenericValueError)
+    @test_broken failval("0.0e+00" , TOML.Internals.ErrGenericValueError)
 
     @test testval("1.0"         , 1.0)
     @test testval("1.0e0"       , 1.0)
@@ -52,11 +51,11 @@ end
     @test testval("+1_000" , 1000  |> Int64)
     @test testval("-1_000" , -1000 |> Int64)
 
-    @test failval("0_"     , Internals.ErrUnderscoreNotSurroundedByDigits)
-    @test failval("0__0"   , Internals.ErrUnderscoreNotSurroundedByDigits)
-    @test failval("__0"    , Internals.ErrUnexpectedStartOfValue)
-    @test failval("1_0_"   , Internals.ErrTrailingUnderscoreNumber)
-    @test failval("1_0__0" , Internals.ErrUnderscoreNotSurroundedByDigits)
+    @test failval("0_"     , TOML.Internals.ErrUnderscoreNotSurroundedByDigits)
+    @test failval("0__0"   , TOML.Internals.ErrUnderscoreNotSurroundedByDigits)
+    @test failval("__0"    , TOML.Internals.ErrUnexpectedStartOfValue)
+    @test failval("1_0_"   , TOML.Internals.ErrTrailingUnderscoreNumber)
+    @test failval("1_0__0" , TOML.Internals.ErrUnderscoreNotSurroundedByDigits)
 end
 
 
@@ -64,12 +63,12 @@ end
     @test testval("true", true)
     @test testval("false", false)
 
-    @test failval("true2"  , Internals.ErrExpectedNewLineKeyValue)
-    @test failval("false2" , Internals.ErrExpectedNewLineKeyValue)
-    @test failval("talse"  , Internals.ErrGenericValueError)
-    @test failval("frue"   , Internals.ErrGenericValueError)
-    @test failval("t1"     , Internals.ErrGenericValueError)
-    @test failval("f1"     , Internals.ErrGenericValueError)
+    @test failval("true2"  , TOML.Internals.ErrExpectedNewLineKeyValue)
+    @test failval("false2" , TOML.Internals.ErrExpectedNewLineKeyValue)
+    @test failval("talse"  , TOML.Internals.ErrGenericValueError)
+    @test failval("frue"   , TOML.Internals.ErrGenericValueError)
+    @test failval("t1"     , TOML.Internals.ErrGenericValueError)
+    @test failval("f1"     , TOML.Internals.ErrGenericValueError)
 end
 
 @testset "Datetime" begin
@@ -78,31 +77,31 @@ end
     @test testval("2016-09-09T09:09:09.0Z"  , DateTime(2016 , 9 , 9 , 9 , 9 , 9))
     @test testval("2016-09-09T09:09:09.012" , DateTime(2016 , 9 , 9 , 9 , 9 , 9  , 12))
 
-    @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
-    @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
-    @test failval("2016-09-09T09:09:09.0+10:00"   , Internals.ErrOffsetDateNotSupported)
-    @test failval("2016-09-09T09:09:09.012-02:00" , Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.0+10:00"   , TOML.Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.012-02:00" , TOML.Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.0+10:00"   , TOML.Internals.ErrOffsetDateNotSupported)
+    @test failval("2016-09-09T09:09:09.012-02:00" , TOML.Internals.ErrOffsetDateNotSupported)
 
-    @test failval("2016-09-09T09:09:09.Z" , Internals.ErrParsingDateTime)
-    @test failval("2016-9-09T09:09:09Z"   , Internals.ErrParsingDateTime)
-    @test failval("2016-13-09T09:09:09Z"  , Internals.ErrParsingDateTime)
-    @test failval("2016-02-31T09:09:09Z"  , Internals.ErrParsingDateTime)
-    @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
-    @test failval("2016-09-09s09:09:09Z"  , Internals.ErrParsingDateTime)
-    @test failval("2016-09-09T09:09:09x"  , Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09.Z" , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-9-09T09:09:09Z"   , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-13-09T09:09:09Z"  , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-02-31T09:09:09Z"  , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09x"  , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-09-09s09:09:09Z"  , TOML.Internals.ErrParsingDateTime)
+    @test failval("2016-09-09T09:09:09x"  , TOML.Internals.ErrParsingDateTime)
 end
 
 @testset "Time" begin
     @test testval("09:09:09.99"    , Time(9 , 9 , 9 , 99))
     @test testval("09:09:09.99999" , Time(9 , 9 , 9 , 999))
 
-    @test failval("09:09x09", Internals.ErrParsingDateTime)
+    @test failval("09:09x09", TOML.Internals.ErrParsingDateTime)
 end
 
 # TODO: Add more dedicated value tests
 
 @testset "String" begin
-    @test failval("\"foooo", Internals.ErrUnexpectedEndString)
+    @test failval("\"foooo", TOML.Internals.ErrUnexpectedEndString)
 
     #=
     Found these examples of string tests somewhere

@@ -115,10 +115,18 @@ function startup(l::Parser)
     end
 end
 
-Parser() = Parser("")
-Parser(io::IO) = Parser(read(io, String))
+Parser(; dicttype=TOMLDict) = Parser(""; root=dicttype())
+Parser(io::IO; dicttype=TOMLDIct) = Parser(read(io, String); root=dicttype())
 
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing, root::DictType=TOMLDict()) where {DictType <: AbstractDictType}
+    # Change the DictType associated with p
+    new_p = Parser(; dicttype=DictType)
+    for field in fieldnames(Parser)
+        if !(field in [:root, :active_table, :inline_tables, :defined_tables])
+            setfield!(new_p, field, getfield(p, field))
+        end
+    end
+    p = new_p
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
@@ -613,7 +621,7 @@ function _parse_key(l::Parser{DictType}) where {DictType <: AbstractDictType}
             String(take_substring(l))
         else
             c = eat_char(l)
-            return ParserError{DIctType}(ErrInvalidBareKeyCharacter, c)
+            return ParserError{DictType}(ErrInvalidBareKeyCharacter, c)
         end
     end
     new_key = keyval
@@ -885,7 +893,7 @@ function take_string_or_substring(l, contains_underscore)::SubString
     return contains_underscore ? SubString(filter(x -> x != '_', subs)) : subs
 end
 
-function parse_float(l::Parser, contains_underscore)::Err{Float64}
+function parse_float(l::Parser{DictType}, contains_underscore)::Err{Float64} where {DictType <: AbstractDictType}
     s = take_string_or_substring(l, contains_underscore)
     v = Base.tryparse(Float64, s)
     v === nothing && return(ParserError{DictType}(ErrGenericValueError))
@@ -936,7 +944,7 @@ ok_end_value(c::Char) = iswhitespace(c) || c == '#' || c == EOF_CHAR || c == ']'
    date-time       = full-date "T" full-time
 =#
 
-accept_two(l, f::F) where {F} = accept_n(l, 2, f) || return(ParserError{DictType}(ErrParsingDateTime))
+accept_two(l::Parser{DictType}, f::F) where {DictType <: AbstractDictType, F} = accept_n(l, 2, f) || return(ParserError{DictType}(ErrParsingDateTime))
 
 function parse_datetime(l::Parser{DictType}) where {DictType <: AbstractDictType}
     # Year has already been eaten when we reach here
